@@ -15,13 +15,16 @@ export default function Unlocker({ code }: { code: string }) {
   const [tsToken, setTsToken] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [smartLinkOpened, setSmartLinkOpened] = useState(false);
+  const [adClicks, setAdClicks] = useState(0);
   const widgetRef = useRef<HTMLDivElement>(null);
   const rendered = useRef(false);
-  const allowNavRef = useRef(false);
 
   const SMART_LINK =
     "https://www.effectivecpmnetwork.com/sm5xqczp?key=40edaf85ab1f07358dcb031a21ee4ce1";
+  const SMART_LINK_2 =
+    "https://www.effectivecpmnetwork.com/w3194snfs?key=28b8efa0c33161aee110d378e2a5c52a";
+  const SMART_LINK_3 =
+    "https://www.effectivecpmnetwork.com/zcsxs9q14a?key=5888a61216a1477ea1fb0951f57a5c6b";
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -47,27 +50,27 @@ export default function Unlocker({ code }: { code: string }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Stop third-party ad scripts from navigating this tab away.
-  // Ad/popunder scripts sometimes try window.location changes on the
-  // current tab as their mechanism; this blocks anything except our
-  // own explicit redirect at the end of the flow.
   useEffect(() => {
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (allowNavRef.current) return;
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
+    let fired = false;
+    function onFirstTouch() {
+      if (fired) return;
+      fired = true;
+      window.open(SMART_LINK_3, "_blank");
+      document.removeEventListener("pointerdown", onFirstTouch);
+    }
+    document.addEventListener("pointerdown", onFirstTouch, { once: true });
+    return () => document.removeEventListener("pointerdown", onFirstTouch);
   }, []);
 
   async function continueClick() {
-    if (!smartLinkOpened) {
-      const win = window.open("about:blank", "_blank");
-      if (win) win.location.href = SMART_LINK;
-      setSmartLinkOpened(true);
+    if (adClicks < 1) {
+      window.open(SMART_LINK, "_blank");
+      setAdClicks((c) => c + 1);
       return;
     }
+
+    window.open(SMART_LINK_2, "_blank");
+
     setLoading(true);
     setErr("");
     const res = await fetch("/api/verify", {
@@ -81,7 +84,6 @@ export default function Unlocker({ code }: { code: string }) {
       setErr(data.error ?? "Verification failed");
       return;
     }
-    allowNavRef.current = true;
     window.location.href = `/api/r/${code}?token=${encodeURIComponent(data.token)}`;
   }
 
@@ -100,7 +102,7 @@ export default function Unlocker({ code }: { code: string }) {
       >
         {loading ? "Redirecting..." : "Continue"}
       </button>
-      {smartLinkOpened && !loading && (
+      {adClicks === 1 && !loading && (
         <p className="text-neutral-500 text-sm">Click Continue again to unlock your link</p>
       )}
       {err && <p className="text-red-400 text-sm">{err}</p>}
