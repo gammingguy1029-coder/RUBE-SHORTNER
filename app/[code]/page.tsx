@@ -2,7 +2,6 @@ import { db } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Unlocker from "./Unlocker";
 import AdScripts from "./AdScripts";
-import NativeBanner from "./NativeBanner";
 import Banner300 from "./Banner300";
 
 export default async function CodePage({ params }: { params: Promise<{ code: string }> }) {
@@ -15,7 +14,6 @@ export default async function CodePage({ params }: { params: Promise<{ code: str
   return (
     <main className="max-w-md mx-auto p-6 flex flex-col gap-6 min-h-screen justify-center">
       <AdScripts />
-      <NativeBanner />
       <Unlocker code={code} />
       <Banner300 />
     </main>
