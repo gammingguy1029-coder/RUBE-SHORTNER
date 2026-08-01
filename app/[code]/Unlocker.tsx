@@ -18,6 +18,7 @@ export default function Unlocker({ code }: { code: string }) {
   const [smartLinkOpened, setSmartLinkOpened] = useState(false);
   const widgetRef = useRef<HTMLDivElement>(null);
   const rendered = useRef(false);
+  const allowNavRef = useRef(false);
 
   const SMART_LINK =
     "https://www.effectivecpmnetwork.com/sm5xqczp?key=40edaf85ab1f07358dcb031a21ee4ce1";
@@ -46,9 +47,24 @@ export default function Unlocker({ code }: { code: string }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Stop third-party ad scripts from navigating this tab away.
+  // Ad/popunder scripts sometimes try window.location changes on the
+  // current tab as their mechanism; this blocks anything except our
+  // own explicit redirect at the end of the flow.
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (allowNavRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, []);
+
   async function continueClick() {
     if (!smartLinkOpened) {
-      window.open(SMART_LINK, "_blank");
+      const win = window.open("about:blank", "_blank");
+      if (win) win.location.href = SMART_LINK;
       setSmartLinkOpened(true);
       return;
     }
@@ -65,6 +81,7 @@ export default function Unlocker({ code }: { code: string }) {
       setErr(data.error ?? "Verification failed");
       return;
     }
+    allowNavRef.current = true;
     window.location.href = `/api/r/${code}?token=${encodeURIComponent(data.token)}`;
   }
 
