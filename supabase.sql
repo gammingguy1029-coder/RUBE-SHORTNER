@@ -1,4 +1,7 @@
-create table links (
+-- Every statement is idempotent. Postgres aborts the whole batch on the first
+-- error, so a bare `create table` on an existing database stopped the script at
+-- line 1 and login_attempts below was never created.
+create table if not exists links (
   id uuid primary key default gen_random_uuid(),
   short_code text unique not null,
   destination_url text not null,
@@ -6,9 +9,11 @@ create table links (
   views int default 0,
   enabled boolean default true
 );
--- Note: the unique constraint on short_code already creates an index, so the
--- explicit one below is redundant. Harmless, kept to avoid changing behaviour.
-create index on links (short_code);
+-- Note: the unique constraint on short_code already creates an index, so this
+-- one is redundant. Harmless, kept to avoid changing behaviour. Named rather
+-- than auto-named: an auto-named index gets a numeric suffix on conflict, so
+-- re-running would silently pile up links_short_code_idx1, idx2, and so on.
+create index if not exists links_short_code_idx on links (short_code);
 
 -- Brute-force tracking for admin login. Must live in the database, not memory:
 -- in-memory counters reset on every serverless cold start and aren't shared
