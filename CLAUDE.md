@@ -1,0 +1,1 @@
+make the work faster think like if mine cant wotk researh how others are working and use less toeksn fix issues one by one 
