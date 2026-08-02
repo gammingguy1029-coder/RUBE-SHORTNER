@@ -20,7 +20,12 @@
   </head>
   <body>
     <script type="text/javascript">
-      atOptions = {
+      // Assigned to window explicitly. A bare `atOptions = {...}` only becomes a
+      // global by implicit-global fallback, which is what invoke.js reads — it
+      // happens to work here, but it silently breaks the moment this file is
+      // touched by anything that adds "use strict" or wraps it in a module, and
+      // the failure mode is a blank ad with no error.
+      window.atOptions = {
         key: "6e855ffe8642d5f59d1f63f665190696",
         format: "iframe",
         height: 250,
