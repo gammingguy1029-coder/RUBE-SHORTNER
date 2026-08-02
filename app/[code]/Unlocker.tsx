@@ -110,14 +110,32 @@ export default function Unlocker({ code }: { code: string }) {
       deadline = Date.now() + COUNTDOWN_SECONDS * 1000;
     }
 
+    // `let`, declared before tick, and assigned after. The previous version had
+    // `tick()` on the line ABOVE `const id = setInterval(...)`, so the first
+    // synchronous tick reached `clearInterval(id)` while `id` was still in the
+    // temporal dead zone — a hard ReferenceError that unmounted the whole page.
+    // It only fired when the restored deadline had already passed, i.e. exactly
+    // when someone refreshed after the countdown finished: the one path this
+    // feature exists to support. The guard below is what makes the early call
+    // safe, since on that first tick there is no interval to clear yet.
+    let id: ReturnType<typeof setInterval> | undefined;
+
     const tick = () => {
       const left = Math.ceil((deadline - Date.now()) / 1000);
       setSeconds(left > 0 ? left : 0);
-      if (left <= 0) clearInterval(id);
+      if (left <= 0 && id !== undefined) clearInterval(id);
     };
+
     tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
+    // Only start ticking if there is actually time left. Without this, a resumed
+    // deadline in the past would spin a 250ms interval forever, re-setting state
+    // to the same 0 on every tick for as long as the visitor stayed on the page.
+    if (Math.ceil((deadline - Date.now()) / 1000) > 0) {
+      id = setInterval(tick, 250);
+    }
+    return () => {
+      if (id !== undefined) clearInterval(id);
+    };
   }, [code]);
 
   /** Mint a fresh Turnstile token after one is consumed, expires, or errors. */
