@@ -3,6 +3,14 @@
 /**
  * Renders a third-party ad unit inside a sandboxed iframe.
  *
+ * No loading="lazy" — deliberate, do not add it back. The 300x250 unit sits
+ * below the unlock button and the disclaimer text, so on a phone it starts below
+ * the fold. Lazy defers the request until the frame nears the viewport, and in
+ * this flow the visitor has no reason to scroll past the button they came for,
+ * so that request was frequently never made at all: no render, no impression,
+ * no revenue. Eager costs one extra request on a page that only ever shows two
+ * ads, which is the right trade.
+ *
  * Sandbox rationale — the permissions here are deliberate:
  *   allow-scripts                  ad script must run
  *   allow-popups                   creative click opens a new tab (without this, CTR is 0)
@@ -43,7 +51,6 @@ export default function AdFrame({
         title={title}
         width={width}
         height={height}
-        loading="lazy"
         scrolling="no"
         referrerPolicy="strict-origin-when-cross-origin"
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
