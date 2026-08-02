@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import AdFrame from "@/app/components/AdFrame";
+import AdUnit from "@/app/components/AdUnit";
 import { useAdblockDetect } from "@/lib/adblock";
 
 declare global {
@@ -406,11 +406,12 @@ export default function Unlocker({ code }: { code: string }) {
         </div>
 
         {/* Native banner fills the countdown dead-time with earning inventory. */}
-        <AdFrame
-          unit="native-banner.html"
+        <AdUnit
+          variant="native"
+          adKey="6e6cc333f8d31100c0f630699c8b02cc"
+          scriptSrc="https://pl30646646.effectivecpmnetwork.com/6e6cc333f8d31100c0f630699c8b02cc/invoke.js"
           width={336}
           height={280}
-          title="Sponsored content"
           className="w-full"
         />
 
@@ -485,8 +486,10 @@ export default function Unlocker({ code }: { code: string }) {
         )}
 
         {/* Banner below the fold-line: a second impression per visit. */}
-        <AdFrame
-          unit="banner-300x250.html"
+        <AdUnit
+          variant="banner"
+          adKey="b00444c5eda4e8aa8c625ec8d2c44342"
+          scriptSrc="https://www.highperformanceformat.com/b00444c5eda4e8aa8c625ec8d2c44342/invoke.js"
           width={300}
           height={250}
           className="w-full"
