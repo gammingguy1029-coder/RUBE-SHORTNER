@@ -1,110 +1,56 @@
 "use client";
 import { useEffect, useState } from "react";
-import { AD_SCRIPT_URLS } from "@/lib/adUnits";
 
 /**
  * Adblock / ad-blocking-VPN detection.
  *
- * Four independent probes, each catching something the others miss. A visitor
- * is gated when at least two agree. Requiring two keeps a flaky CDN or a single
- * network blip from locking out a paying visitor; requiring more than two let
- * real blockers through, which is the failure this file exists to prevent.
+ * Two kinds of signal, deliberately different in nature:
  *
- * Returns "unknown" until every probe has settled, so callers never act on a
- * half-finished result.
+ * 1. The REAL outcome. AdUnit reports whether each ad script actually loaded.
+ *    A script element's onerror fires on DNS failure, on an ad-blocker abort,
+ *    AND on an HTTP error status — so this one signal covers extensions, DNS
+ *    blocklists, and an ad network refusing the request. It is ground truth
+ *    rather than inference, so it is conclusive on its own.
+ *
+ * 2. Pre-emptive probes. Cheap same-origin checks that catch the common
+ *    extension blockers before the ad scripts even get a chance, so those
+ *    visitors never stare at empty slots. Both must agree, because either alone
+ *    false-positives and a false positive costs a real visitor.
+ *
+ * Returns "unknown" until there is something to act on.
+ *
+ * Two earlier designs failed here and are worth not repeating. A no-cors fetch
+ * to the ad domains cannot detect a 403: an opaque response resolves whatever
+ * the status, so refused traffic read as reachable. And a <script> bait pointed
+ * at pagead2.googlesyndication.com is blocked by our own CSP in middleware.ts,
+ * which allowlists only Cloudflare and the two ad hosts — so it reported
+ * "blocked" for every visitor on the planet.
  */
 export type AdblockStatus = "unknown" | "clear" | "blocked";
 
 const PROBE_TIMEOUT_MS = 4000;
 
-/**
- * Bait script for probe 1.
+/* ------------------------------------------------------------------ *
+ * Real ad-load outcomes, reported by AdUnit.
  *
- * Deliberately NOT one of our own ad scripts. Ours are obscure, so filter-list
- * coverage of them is patchy, which makes them a weak signal. This URL is on
- * essentially every list — EasyList, AdGuard, the default Pi-hole and NextDNS
- * blocklists — so it is the closest thing to a universal canary. Loading it
- * records no impression for us and, with no adsbygoogle slot on the page, the
- * script is inert if it does load.
- */
-const BAIT_SCRIPT =
-  "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js";
+ * Module-level on purpose: it survives the remount that happens when the gate
+ * panel swaps out the ad units, so a detected block stays latched instead of
+ * oscillating. A full page reload clears it, which is exactly what the
+ * "I've disabled it — re-check" button does.
+ * ------------------------------------------------------------------ */
 
-/**
- * Probe 1: does a universally blocklisted ad script load?
- *
- * A script tag sidesteps CORS entirely and reports the same success or failure
- * the real ad units will get, which makes it the strongest single signal. It
- * also catches DNS-level blocking a same-origin check cannot see: the URL is
- * HTTPS, so a sinkhole answering on plain HTTP fails the TLS handshake and
- * fires onerror rather than quietly serving a blank page.
- */
-function scriptProbe(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    let settled = false;
+const failedUnits = new Set<string>();
+const listeners = new Set<() => void>();
 
-    const finish = (blocked: boolean) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      script.remove();
-      resolve(blocked);
-    };
-
-    // A blocker that stalls the socket instead of rejecting would otherwise
-    // leave this promise pending forever and strand the gate at "unknown".
-    const timer = setTimeout(() => finish(true), PROBE_TIMEOUT_MS);
-
-    script.onerror = () => finish(true);
-    script.onload = () => finish(false);
-    script.async = true;
-    script.src = `${BAIT_SCRIPT}?_=${Date.now()}`;
-    document.head.appendChild(script);
-  });
+/** Called by AdUnit once its script either loads or fails. */
+export function reportAdResult(adKey: string, ok: boolean) {
+  const had = failedUnits.has(adKey);
+  if (ok) failedUnits.delete(adKey);
+  else failedUnits.add(adKey);
+  if (had !== failedUnits.has(adKey)) listeners.forEach((fn) => fn());
 }
 
-/**
- * Probe 2: are our own ad networks reachable?
- *
- * ANY unreachable domain counts. This previously required every domain to fail,
- * which is why detection never fired: www.highperformanceformat.com is on the
- * common filter lists but the randomised effectivecpmnetwork subdomain usually
- * is not, so one request always succeeded and the probe reported clear while
- * half the inventory was being dropped.
- *
- * mode:"no-cors" is deliberate. We cannot read a cross-origin response and do
- * not need to: a blocked request rejects, a reachable one resolves opaque. That
- * also means no impression is recorded, so probing cannot inflate the ad count.
- * An opaque resolve does not prove the script is valid — a 403 resolves too —
- * only that DNS and the network path are intact, which is the question here.
- */
-async function networkProbe(): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-
-  try {
-    const results = await Promise.all(
-      AD_SCRIPT_URLS.map(async (url) => {
-        try {
-          await fetch(url, {
-            mode: "no-cors",
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      })
-    );
-    return results.some((ok) => !ok);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** Probe 3: can we fetch our own ad frame? Blockers match the /ads/ URL. */
+/** Probe A: can we fetch our own ad frame? Blockers match the /ads/ URL. */
 async function fetchProbe(): Promise<boolean> {
   // fetch() has no default timeout. A request that hangs rather than failing —
   // captive portal, dead DNS, a blocker that stalls the socket instead of
@@ -128,7 +74,7 @@ async function fetchProbe(): Promise<boolean> {
   }
 }
 
-/** Probe 4: does a bait element with ad-like classes get hidden or removed? */
+/** Probe B: does a bait element with ad-like classes get hidden or removed? */
 function baitProbe(): boolean {
   const bait = document.createElement("div");
   bait.className =
@@ -155,32 +101,32 @@ function baitProbe(): boolean {
 }
 
 export function useAdblockDetect(enabled: boolean): AdblockStatus {
-  const [status, setStatus] = useState<AdblockStatus>("unknown");
+  const [adFailed, setAdFailed] = useState(false);
+  const [probed, setProbed] = useState<boolean | null>(null);
 
+  /* Subscribe to the real ad-load outcomes. */
+  useEffect(() => {
+    const sync = () => setAdFailed(failedUnits.size > 0);
+    listeners.add(sync);
+    // A unit may have already reported before this effect ran.
+    sync();
+    return () => {
+      listeners.delete(sync);
+    };
+  }, []);
+
+  /* Run the pre-emptive probes. */
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
 
     // Small delay so a blocker's content scripts have applied their rules.
     const t = setTimeout(async () => {
-      // Run the network-dependent probes together rather than in sequence, so
-      // the worst case is one timeout instead of three.
-      const [byScript, byNetwork, byFetch] = await Promise.all([
-        scriptProbe(),
-        networkProbe(),
-        fetchProbe(),
-      ]);
+      const byFetch = await fetchProbe();
       if (cancelled) return;
       const byBait = baitProbe();
       if (cancelled) return;
-
-      // Two-of-four. Each probe sees a different layer — third-party script
-      // loading, our own ad domains, our own origin, and page cosmetics — so a
-      // blocker has to stay invisible to three of them to get through. One
-      // signal alone is not enough: transient errors trip the network probes
-      // and unrelated CSS trips the bait.
-      const signals = [byScript, byNetwork, byFetch, byBait].filter(Boolean).length;
-      setStatus(signals >= 2 ? "blocked" : "clear");
+      setProbed(byFetch && byBait);
     }, 900);
 
     return () => {
@@ -189,5 +135,9 @@ export function useAdblockDetect(enabled: boolean): AdblockStatus {
     };
   }, [enabled]);
 
-  return status;
+  // Ground truth wins and needs no second opinion: if an ad script did not
+  // load, there is no ad to show, whatever the probes think.
+  if (adFailed) return "blocked";
+  if (!enabled || probed === null) return "unknown";
+  return probed ? "blocked" : "clear";
 }

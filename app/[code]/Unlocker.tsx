@@ -362,25 +362,34 @@ export default function Unlocker({ code }: { code: string }) {
     );
   }
 
-  // Gate the flow while a blocker is detected. Both probes had to agree to get
-  // here, and the visitor can always re-check — nothing is permanent, so a rare
-  // false positive costs a tap rather than the whole redirect.
+  // Gate the flow when the ads cannot load. Reached either because an ad script
+  // actually failed (blocker, DNS blocklist, or the network refusing a VPN or
+  // datacenter IP with a 403) or because both pre-emptive probes agreed. The
+  // visitor can always re-check, so a rare false positive costs a tap rather
+  // than the whole redirect.
   if (adblock === "blocked") {
     return (
       <div className="flex flex-col gap-4 rounded-lg border border-amber-900/50 bg-amber-950/20 p-5 text-center">
         <h1 className="text-lg font-semibold text-amber-300">
-          Ad blocker detected
+          Please disable your VPN or ad blocker
         </h1>
         <p className="text-sm leading-relaxed text-neutral-400">
-          This link is free because advertising pays for it. To continue, please
-          turn off anything that blocks ads for this page, then re-check.
+          The adverts on this page could not load, and they are what pays for
+          this link. Turn off whatever is blocking them, then re-check.
         </p>
         <ul className="mx-auto list-disc space-y-1.5 pl-5 text-left text-sm text-neutral-400 marker:text-neutral-600">
+          <li>
+            <strong className="text-neutral-300">Disconnect your VPN</strong> or
+            proxy — advert providers reject VPN connections
+          </li>
           <li>Pause your ad blocker (uBlock, AdBlock, Adguard) for this site</li>
           <li>Turn off Brave Shields or your browser&rsquo;s built-in blocker</li>
-          <li>Disconnect any VPN or ad-blocking DNS (Pi-hole, NextDNS)</li>
+          <li>Switch off ad-blocking DNS (Pi-hole, NextDNS, AdGuard DNS)</li>
           <li>Disable privacy extensions for this page</li>
         </ul>
+        {/* Full reload, not a state reset: the failed-unit record is module
+            level so it survives a remount, and the ad scripts have to be
+            requested again from scratch to get a different answer. */}
         <button
           onClick={() => location.reload()}
           className="w-full rounded bg-white px-6 py-2.5 font-medium text-black transition hover:bg-neutral-200"

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { reportAdResult } from "@/lib/adblock";
 
 /**
  * Renders an Adsterra unit directly in the page.
@@ -69,6 +70,33 @@ export default function AdUnit({
     const script = document.createElement("script");
     script.type = "text/javascript";
     script.src = scriptSrc;
+
+    // Report the real outcome to adblock detection. onerror covers everything
+    // that matters in one event: an ad-blocker abort, a DNS blocklist or VPN
+    // resolver dropping the domain, AND an HTTP error status — which is how an
+    // ad network refuses traffic it won't serve, such as a known VPN or
+    // datacenter IP. That last case is invisible to a no-cors fetch probe,
+    // because an opaque response resolves whatever the status code.
+    // Declared before finish() so the closure can never read it in the temporal
+    // dead zone. The countdown effect in Unlocker.tsx took a hard ReferenceError
+    // from exactly this shape.
+    let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (loadTimer !== undefined) clearTimeout(loadTimer);
+      reportAdResult(adKey, ok);
+    };
+
+    // Some filtering stalls the socket instead of failing it, so neither event
+    // ever fires. Without this the unit would sit unreported forever and the
+    // gate would never see it.
+    loadTimer = setTimeout(() => finish(false), 8000);
+    script.onload = () => finish(true);
+    script.onerror = () => finish(false);
+
     if (variant === "native") {
       script.async = true;
       script.setAttribute("data-cfasync", "false");
