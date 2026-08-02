@@ -20,9 +20,18 @@ export function sign(code: string): string {
 export function verify(token: string, code: string): boolean {
   try {
     const raw = Buffer.from(token, "base64url").toString();
-    const [tCode, expStr, sig] = raw.split(".");
+    const parts = raw.split(".");
+    // Exactly three fields. A token with extra dots would otherwise have its
+    // tail silently ignored by destructuring.
+    if (parts.length !== 3) return false;
+    const [tCode, expStr, sig] = parts;
+    if (!tCode || !expStr || !sig) return false;
     if (tCode !== code) return false;
-    if (Date.now() > Number(expStr)) return false;
+
+    // Number("abc") is NaN and every NaN comparison is false, so a bare
+    // `Date.now() > Number(expStr)` passes junk straight through the expiry gate.
+    const expMs = Number(expStr);
+    if (!Number.isFinite(expMs) || Date.now() > expMs) return false;
     const expected = createHmac("sha256", SECRET)
       .update(`${tCode}.${expStr}`)
       .digest("hex");

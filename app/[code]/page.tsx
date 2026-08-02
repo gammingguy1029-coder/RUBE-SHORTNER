@@ -12,7 +12,13 @@ export default async function CodePage({ params }: { params: Promise<{ code: str
   const { code } = await params;
   if (!/^[A-Za-z0-9]{6,12}$/.test(code)) notFound();
 
-  const { data } = await db.from("links").select("enabled").eq("short_code", code).single();
+  // .maybeSingle(): .single() reports zero rows as an error, so a missing code
+  // and a database fault were indistinguishable here.
+  const { data } = await db
+    .from("links")
+    .select("enabled")
+    .eq("short_code", code)
+    .maybeSingle();
   if (!data || !data.enabled) notFound();
 
   return (

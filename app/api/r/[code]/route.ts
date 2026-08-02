@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { verify } from "@/lib/token";
 import { rateLimit } from "@/lib/ratelimit";
+import { clientIp } from "@/lib/clientIp";
 
 const CODE_RE = /^[A-Za-z0-9]{6,12}$/;
 
@@ -60,7 +61,7 @@ function retryPage(code: string, message: string) {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const token = req.nextUrl.searchParams.get("token") ?? "";
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = clientIp(req);
 
   if (!CODE_RE.test(code)) {
     return retryPage("", "That link address is not valid.");
@@ -77,14 +78,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     );
   }
 
+  // .maybeSingle(): .single() reports zero rows as an error, so a deleted code
+  // and a database fault both arrived as data === null.
   const { data } = await db
     .from("links")
     .select("id, destination_url, enabled, views")
     .eq("short_code", code)
-    .single();
+    .maybeSingle();
 
   if (!data || !data.enabled) {
     return retryPage("", "This link is no longer available.");
+  }
+
+  // Re-validate the scheme at redirect time. /api/create checks it on write, but
+  // rows created before that check existed — or edited straight in Supabase —
+  // are not covered, and a stored javascript: or data: URL would run in our own
+  // origin. Cheap to verify here, so the write-side check is not the only gate.
+  let safeDestination: string;
+  try {
+    const parsed = new URL(data.destination_url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return retryPage("", "This link's destination is misconfigured.");
+    }
+    safeDestination = parsed.toString();
+  } catch {
+    return retryPage("", "This link's destination is misconfigured.");
   }
 
   // Fire-and-forget so a slow analytics write never delays the redirect. Note
@@ -94,11 +112,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     .update({ views: (data.views ?? 0) + 1 })
     .eq("id", data.id);
 
-  // A malformed destination_url would otherwise throw here and return a 500
-  // instead of redirecting.
-  try {
-    return NextResponse.redirect(data.destination_url, { status: 302 });
-  } catch {
-    return retryPage("", "This link's destination is misconfigured.");
-  }
+  return NextResponse.redirect(safeDestination, { status: 302 });
 }

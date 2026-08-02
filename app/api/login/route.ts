@@ -6,12 +6,10 @@ import {
   clearFailures,
   passwordMatches,
 } from "@/lib/loginGuard";
+import { clientIp } from "@/lib/clientIp";
 
 export async function POST(req: NextRequest) {
-  // x-forwarded-for is a comma-separated chain; the old code used the whole
-  // header as the rate-limit key, so the key changed whenever an upstream hop
-  // changed and the limit could be sidestepped.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = clientIp(req);
 
   const gate = await checkLoginAllowed(ip);
 

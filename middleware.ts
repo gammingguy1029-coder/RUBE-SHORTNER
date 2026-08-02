@@ -27,7 +27,7 @@ const RESERVED_PATHS = new Set([
 
 export function middleware(req: NextRequest) {
   const res = NextResponse.next();
-  const { pathname, searchParams } = req.nextUrl;
+  const { pathname } = req.nextUrl;
 
   res.headers.set("X-Content-Type-Options", "nosniff");
 
@@ -97,10 +97,12 @@ export function middleware(req: NextRequest) {
     );
   }
 
-  if (pathname.startsWith("/api/r/") && !searchParams.get("token")) {
-    return NextResponse.json({ error: "Direct access forbidden" }, { status: 403 });
-  }
-
+  // A tokenless /api/r/ request is NOT blocked here. It used to return raw JSON,
+  // which pre-empted the route's own retryPage() — so a visitor who had already
+  // watched both ads and finished the countdown hit a wall of JSON with no way
+  // back. The route rejects the empty token itself (verify("") is false) and
+  // serves a styled page with a working retry link, so nothing is lost by
+  // letting it through.
   return res;
 }
 

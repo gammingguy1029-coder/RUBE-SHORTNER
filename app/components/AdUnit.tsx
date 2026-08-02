@@ -69,10 +69,15 @@ export default function AdUnit({
     const script = document.createElement("script");
     script.type = "text/javascript";
     script.src = scriptSrc;
-    script.async = true;
-    // Cloudflare rewrites third-party scripts unless told not to; Adsterra's
-    // own snippet sets this and the script can misbehave without it.
-    script.setAttribute("data-cfasync", "false");
+    if (variant === "native") {
+      script.async = true;
+      script.setAttribute("data-cfasync", "false");
+    } else {
+      // Must match Adsterra's banner snippet, which has no async. Dynamically
+      // created scripts default to async, and a document.write from an async
+      // script is dropped by the browser — blank slot, no error.
+      script.async = false;
+    }
     host.current.appendChild(script);
   }, [adKey, width, height, variant, scriptSrc]);
 
