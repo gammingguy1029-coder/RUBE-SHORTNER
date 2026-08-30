@@ -1,0 +1,90 @@
+import { NextRequest, NextResponse } from "next/server";
+
+/** Ad network hosts that must be allowed to load scripts/frames/images. All on main domain. */
+const AD_HOSTS = [
+  "https://*.effectivecpmnetwork.com",
+  "https://www.highperformanceformat.com",
+  "https://*.highperformanceformat.com",
+  "https://www.highrevenueformat.com",
+  "https://*.highrevenueformat.com",
+  "https://*.profitableratecpmnetwork.com",
+].join(" ");
+
+/**
+ * Static routes that would otherwise match the short-code pattern below.
+ * "/privacy" (7), "/contact" (7) and "/disclaimer" (10) are all alphanumeric
+ * and within the 6-12 length window, so without this list they would be served
+ * the loosened ad-page CSP. Next.js still routes them to the correct static
+ * page — only the headers were wrong. Add any future top-level page here.
+ */
+const RESERVED_PATHS = new Set([
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/contact",
+  "/dmca",
+  "/admin",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
+
+export function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const { pathname } = req.nextUrl;
+
+  res.headers.set("X-Content-Type-Options", "nosniff");
+
+  // Was "no-referrer" site-wide, which stripped the referrer from ad clicks.
+  // Networks use the referrer for attribution and traffic-quality scoring, and
+  // blank-referrer traffic is commonly devalued or flagged. This still hides the
+  // full path (which contains the short code) but sends the origin.
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  const isCodePage =
+    !RESERVED_PATHS.has(pathname) && /^\/[A-Za-z0-9]{6,12}$/.test(pathname);
+
+  if (isCodePage) {
+    res.headers.set(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com ${AD_HOSTS}`,
+        "frame-src 'self' https://challenges.cloudflare.com https:",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' https: data:",
+        "connect-src 'self' https://challenges.cloudflare.com https:",
+        // Previously the code page had NO frame protection at all, so anyone
+        // could embed the unlocker in a hidden iframe and farm impressions —
+        // invalid traffic attributed to our ad account.
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+    res.headers.set("X-Frame-Options", "DENY");
+  } else {
+    res.headers.set("X-Frame-Options", "DENY");
+    res.headers.set(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+        "frame-src 'self' https://challenges.cloudflare.com",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' https: data:",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+  }
+
+  // A tokenless /api/r/ request is NOT blocked here. It used to return raw JSON,
+  // which pre-empted the route's own retryPage() — so a visitor who had already
+  // watched both ads and finished the countdown hit a wall of JSON with no way
+  // back. The route rejects the empty token itself (verify("") is false) and
+  // serves a styled page with a working retry link, so nothing is lost by
+  // letting it through.
+  return res;
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};

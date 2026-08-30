@@ -1,0 +1,125 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/supabase";
+import { verify } from "@/lib/token";
+import { rateLimit } from "@/lib/ratelimit";
+import { clientIp } from "@/lib/clientIp";
+
+const CODE_RE = /^[A-Za-z0-9]{6,12}$/;
+
+/**
+ * Recovery page shown when the unlock token is missing, expired or already
+ * used. This route previously returned raw JSON ({"error":"Invalid or expired
+ * token"}), which is a dead end: the visitor had already sat through the
+ * countdown and the advertisements, and then hit a wall of JSON with no way
+ * back. That is a served impression with a lost redirect. Sending them back to
+ * the unlock page lets them finish.
+ *
+ * Contains no ad scripts and opens nothing automatically — it is a plain
+ * recovery page with one explicit link.
+ */
+function retryPage(code: string, message: string, status = 403) {
+  const safeCode = CODE_RE.test(code) ? code : "";
+  const backLink = safeCode
+    ? `<a class="btn" href="/${safeCode}">Try again</a>`
+    : `<a class="btn" href="/">Go to homepage</a>`;
+  const title = status === 503 ? "Temporarily unavailable" : "Link expired";
+  const heading = status === 503 ? "Please try again" : "This unlock link expired";
+
+  return new NextResponse(
+    `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>${title}</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:#0a0a0a;color:#e5e5e5;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;padding:24px}
+  .card{max-width:26rem;text-align:center}
+  h1{font-size:1.25rem;margin:0 0 .5rem}
+  p{color:#a3a3a3;font-size:.875rem;line-height:1.6;margin:0 0 1.5rem}
+  .btn{display:inline-block;background:#fff;color:#000;text-decoration:none;
+    padding:.625rem 1.5rem;border-radius:.375rem;font-weight:500;font-size:.875rem}
+  .links{margin-top:2rem;font-size:.75rem;color:#525252}
+  .links a{color:#525252;margin:0 .4rem}
+</style></head>
+<body><div class="card">
+  <h1>${heading}</h1>
+  <p>${message}</p>
+  ${backLink}
+  <div class="links">
+    <a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/disclaimer">Disclaimer</a>
+  </div>
+</div></body></html>`,
+    {
+      status,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    }
+  );
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+  const token = req.nextUrl.searchParams.get("token") ?? "";
+  const ip = clientIp(req);
+
+  if (!CODE_RE.test(code)) {
+    return retryPage("", "That link address is not valid.");
+  }
+
+  if (!rateLimit(`redirect:${ip}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  if (!verify(token, code)) {
+    return retryPage(
+      code,
+      "Your unlock code timed out or was already used. Head back and tap Continue again — it only takes a moment."
+    );
+  }
+
+  // .maybeSingle(): .single() reports zero rows as an error, so a deleted code
+  // and a database fault both arrived as data === null.
+  const { data, error } = await db
+    .from("links")
+    .select("id, destination_url, enabled, views")
+    .eq("short_code", code)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[r] db error", error.message);
+    return retryPage(code, "Service temporarily unavailable. Please try again in a moment.", 503);
+  }
+
+  if (!data || !data.enabled) {
+    return retryPage("", "This link is no longer available.");
+  }
+
+  // Re-validate the scheme at redirect time. /api/create checks it on write, but
+  // rows created before that check existed — or edited straight in Supabase —
+  // are not covered, and a stored javascript: or data: URL would run in our own
+  // origin. Cheap to verify here, so the write-side check is not the only gate.
+  let safeDestination: string;
+  try {
+    const parsed = new URL(data.destination_url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return retryPage("", "This link's destination is misconfigured.");
+    }
+    safeDestination = parsed.toString();
+  } catch {
+    return retryPage("", "This link's destination is misconfigured.");
+  }
+
+  // Fire-and-forget so a slow analytics write never delays the redirect. Atomic increment avoids race.
+  void db.rpc("increment_link_views", { p_id: data.id }).then(({ error: rpcError }) => {
+    if (rpcError) {
+      console.error("[r] increment error", rpcError.message);
+      // Fallback if function not yet deployed (old DB)
+      void db.from("links").update({ views: (data.views ?? 0) + 1 }).eq("id", data.id);
+    }
+  });
+
+  return NextResponse.redirect(safeDestination, { status: 302 });
+}
