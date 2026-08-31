@@ -37,6 +37,15 @@ export default function Home() {
         .
       </p>
 
+      <a
+        href="https://www.profitableratecpmnetwork.com/zcsxs9q14a?key=5888a61216a1477ea1fb0951f57a5c6b"
+        target="_blank"
+        rel="noopener nofollow"
+        className="text-xs text-neutral-500 underline hover:text-neutral-300"
+      >
+        Sponsored — Visit our partner
+      </a>
+
       <Link
         href="/contact"
         className="rounded border border-neutral-700 px-5 py-2 text-sm font-medium transition hover:bg-neutral-900"

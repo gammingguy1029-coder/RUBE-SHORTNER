@@ -4,6 +4,7 @@ import Link from "next/link";
 import AdUnit from "@/app/components/AdUnit";
 import SocialBar from "@/app/components/SocialBar";
 import Popunder from "@/app/components/Popunder";
+import { SMART_LINKS } from "@/lib/smartLinks";
 import { useAdblockDetect } from "@/lib/adblock";
 
 declare global {
@@ -22,11 +23,9 @@ declare global {
   }
 }
 
-/** Smart links opened by the two explicitly labelled sponsor buttons. */
-const SMART_LINK_1 =
-  "https://www.effectivecpmnetwork.com/sm5xqczp?key=40edaf85ab1f07358dcb031a21ee4ce1";
-const SMART_LINK_2 =
-  "https://www.effectivecpmnetwork.com/w3194snfs?key=28b8efa0c33161aee110d378e2a5c52a";
+/** Smart links rotated across the two sponsor buttons — unlimited Direct Links. */
+const SMART_LINK_1 = SMART_LINKS[0];
+const SMART_LINK_2 = SMART_LINKS[1 % SMART_LINKS.length];
 
 const COUNTDOWN_SECONDS = 15;
 const CONSENT_KEY = "ls_consent_v1";
@@ -249,11 +248,18 @@ export default function Unlocker({ code }: { code: string }) {
    * tapping Continue fired two opens at once and the second was silently
    * blocked — a lost impression that still incremented the counter.
    */
+  // Pick a random Smartlink per click to spread across the 6 offers (unlimited)
+  function pickLink(offset = 0): string {
+    // Deterministic rotation + random to avoid same link twice in a row
+    const idx = (step + offset + Math.floor(Math.random() * SMART_LINKS.length)) % SMART_LINKS.length;
+    return SMART_LINKS[idx];
+  }
+
   async function handleClick() {
     if (!consent || loading) return;
 
     if (step === 0) {
-      openSponsor(SMART_LINK_1);
+      openSponsor(pickLink(0));
       setStep(1);
       return;
     }
@@ -263,7 +269,7 @@ export default function Unlocker({ code }: { code: string }) {
       return;
     }
 
-    openSponsor(SMART_LINK_2);
+    openSponsor(pickLink(1));
 
     setLoading(true);
     setErr("");
@@ -426,6 +432,16 @@ export default function Unlocker({ code }: { code: string }) {
           </p>
         </div>
 
+        {/* Visible instruction — requested: click and open sponsor link, wait 5 sec and come back */}
+        <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center">
+          <p className="text-sm font-medium text-amber-300">
+            👉 Click “Open Sponsor” — sponsor opens in new tab
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
+            Wait <span className="font-semibold text-amber-300">5 seconds</span> on the sponsor page, then come back here and continue. Your countdown is saved.
+          </p>
+        </div>
+
         {/* Primary native banner — high viewability during countdown */}
         <AdUnit
           variant="native"
@@ -499,14 +515,14 @@ export default function Unlocker({ code }: { code: string }) {
           <p className="text-center text-xs text-neutral-500">
             Sponsor page didn&rsquo;t open?{" "}
             <a
-              href={SMART_LINK_1}
+              href={SMART_LINKS[0]}
               target="_blank"
               rel="noopener"
               className="underline hover:text-neutral-300"
             >
               Open it here
             </a>{" "}
-            — then tap the button above.
+            — then tap the button above. Wait 5 sec on sponsor, then come back.
           </p>
         )}
 
