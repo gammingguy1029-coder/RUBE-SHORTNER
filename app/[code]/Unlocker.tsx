@@ -84,12 +84,15 @@ export default function Unlocker({ code }: { code: string }) {
   }, []);
 
   /* Countdown, resumed across refreshes.
-     Previously useState(COUNTDOWN_SECONDS) restarted the full wait on every
-     reload, so an accidental refresh (or coming back from a sponsor tab on a
-     browser that reloaded the page) cost the visitor another 15s and lost
-     redirects. The deadline is stored per-code in sessionStorage, so a refresh
-     resumes where it left off but a genuinely new visit starts fresh. */
+      Previously useState(COUNTDOWN_SECONDS) restarted the full wait on every
+      reload, so an accidental refresh (or coming back from a sponsor tab on a
+      browser that reloaded the page) cost the visitor another 15s and lost
+      redirects. The deadline is stored per-code in sessionStorage, so a refresh
+      resumes where it left off but a genuinely new visit starts fresh.
+      Gated on consent so the 15s is actual ad-view time, not time spent reading
+      the consent gate before any ad has rendered. */
   useEffect(() => {
+    if (!consent) return;
     const key = `ls_deadline_${code}`;
     let deadline: number;
     try {
@@ -133,7 +136,7 @@ export default function Unlocker({ code }: { code: string }) {
     return () => {
       if (id !== undefined) clearInterval(id);
     };
-  }, [code]);
+  }, [code, consent]);
 
   /** Mint a fresh Turnstile token after one is consumed, expires, or errors. */
   const resetCaptcha = useCallback(() => {
@@ -321,7 +324,7 @@ export default function Unlocker({ code }: { code: string }) {
 
   if (!consent) {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-5">
+      <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-5 animate-slideUp shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)]">
         <h1 className="text-lg font-semibold">Before you continue</h1>
         <p className="text-sm leading-relaxed text-neutral-400">
           This link is unlocked by advertising. To continue you must accept our
@@ -363,7 +366,7 @@ export default function Unlocker({ code }: { code: string }) {
         </p>
         <button
           onClick={acceptConsent}
-          className="w-full rounded bg-white px-6 py-2.5 font-medium text-black transition hover:bg-neutral-200"
+          className="w-full rounded bg-white px-6 py-2.5 font-medium text-black transition-all duration-200 hover:bg-neutral-100 hover:shadow-lg hover:scale-[1.015] active:scale-[0.985] shimmer-btn"
         >
           Accept &amp; Continue
         </button>
@@ -384,7 +387,7 @@ export default function Unlocker({ code }: { code: string }) {
   // than the whole redirect.
   if (adblock === "blocked") {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-amber-900/50 bg-amber-950/20 p-5 text-center">
+      <div className="flex flex-col gap-4 rounded-lg border border-amber-900/50 bg-amber-950/20 p-5 text-center animate-slideUp">
         <h1 className="text-lg font-semibold text-amber-300">
           Please disable your VPN or ad blocker
         </h1>
@@ -407,7 +410,7 @@ export default function Unlocker({ code }: { code: string }) {
             requested again from scratch to get a different answer. */}
         <button
           onClick={() => location.reload()}
-          className="w-full rounded bg-white px-6 py-2.5 font-medium text-black transition hover:bg-neutral-200"
+          className="w-full rounded bg-white px-6 py-2.5 font-medium text-black transition-all duration-200 hover:bg-neutral-100 hover:shadow-lg hover:scale-[1.015] active:scale-[0.985] shimmer-btn"
         >
           I&rsquo;ve disabled it — re-check
         </button>
@@ -419,21 +422,26 @@ export default function Unlocker({ code }: { code: string }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="flex flex-col items-center gap-5 animate-fadeIn">
         {/* Social bar + popunder — loaded once on main domain after consent */}
         <SocialBar />
         <Popunder />
-        <div className="text-center">
-          <h1 className="text-lg font-semibold">Your link is almost ready</h1>
+        <div className="text-center animate-slideUp">
+          <h1 className="text-lg font-semibold tracking-tight">Your link is almost ready</h1>
           <p className="mt-1 text-sm text-neutral-500">
             {step === 0
               ? "Step 1 of 2 — visit our sponsor to unlock."
               : "Step 2 of 2 — verify you're human, then finish."}
           </p>
+          {/* Step dots */}
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <span className={`h-1.5 rounded-full transition-all duration-500 ${step >= 0 ? "w-8 bg-white" : "w-6 bg-neutral-700"}`} />
+            <span className={`h-1.5 rounded-full transition-all duration-500 ${step >= 1 ? "w-8 bg-white" : "w-6 bg-neutral-700"}`} />
+          </div>
         </div>
 
         {/* Visible instruction — requested: click and open sponsor link, wait 5 sec and come back */}
-        <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center">
+        <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center animate-slideUp-delay glow-amber">
           <p className="text-sm font-medium text-amber-300">
             {step === 0 ? "→ Click “Open Sponsor & Continue (1 of 2)” — sponsor opens in new tab" : "→ Complete the check, then click “Open Sponsor & Get My Link (2 of 2)”"}
           </p>
@@ -453,19 +461,28 @@ export default function Unlocker({ code }: { code: string }) {
         />
 
         {!countdownDone && (
-          <div className="text-center">
-            <p className="font-mono text-4xl tabular-nums">{seconds}</p>
+          <div className="text-center w-full max-w-[280px]">
+            <p key={seconds} className="font-mono text-4xl tabular-nums animate-tick">
+              {seconds}
+            </p>
             <p className="mt-1 text-xs text-neutral-500">
               Please wait{seconds === 1 ? " 1 second" : ` ${seconds} seconds`}
             </p>
+            {/* Progress bar */}
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+              <div
+                className="h-full rounded-full bg-white transition-all duration-300 ease-linear"
+                style={{ width: `${(seconds / COUNTDOWN_SECONDS) * 100}%` }}
+              />
+            </div>
           </div>
         )}
 
         {countdownDone && step > 0 && (
-          <div className="flex w-full flex-col items-center gap-2">
-            <div ref={widgetHost} className="min-h-[65px]" />
+          <div className="flex w-full flex-col items-center gap-2 animate-fadeIn">
+            <div ref={widgetHost} className="min-h-[65px] transition-all duration-300" />
             {tsFailed && (
-              <div className="text-center text-xs leading-relaxed text-amber-400">
+              <div className="text-center text-xs leading-relaxed text-amber-400 animate-fadeIn">
                 <p>The verification check could not load.</p>
                 <p className="mt-1 text-neutral-500">
                   An ad blocker, VPN or network filter may be blocking it. Disable
@@ -500,7 +517,7 @@ export default function Unlocker({ code }: { code: string }) {
         <button
           onClick={handleClick}
           disabled={step === 0 ? !countdownDone : !canFinish}
-          className="w-full rounded bg-white px-6 py-3 font-medium text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full rounded bg-white px-6 py-3 font-medium text-black transition-all duration-200 hover:shadow-xl hover:scale-[1.015] active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none shimmer-btn"
         >
           {step === 0
             ? countdownDone
@@ -512,13 +529,13 @@ export default function Unlocker({ code }: { code: string }) {
         </button>
 
         {step === 1 && !loading && (
-          <p className="text-center text-xs text-neutral-500">
+          <p className="text-center text-xs text-neutral-500 animate-fadeIn">
             Sponsor page didn&rsquo;t open?{" "}
             <a
               href={SMART_LINKS[0]}
               target="_blank"
               rel="noopener"
-              className="underline hover:text-neutral-300"
+              className="underline hover:text-neutral-300 transition-colors"
             >
               Open it here
             </a>{" "}
@@ -527,7 +544,7 @@ export default function Unlocker({ code }: { code: string }) {
         )}
 
         {err && (
-          <p className="text-center text-sm text-red-400" role="alert">
+          <p className="text-center text-sm text-red-400 animate-fadeIn" role="alert">
             {err}
           </p>
         )}

@@ -6,3 +6,64 @@ body {
   background: #0a0a0a;
   color: #e5e5e5;
 }
+
+/* Subtle animated polish — all CSS-only, no JS, respects reduced-motion */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes tick {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes progressShrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+@keyframes glowPulse {
+  0%, 100% { border-color: rgba(120, 53, 15, 0.35); box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.0); }
+  50% { border-color: rgba(180, 83, 9, 0.5); box-shadow: 0 0 20px -6px rgba(251, 146, 60, 0.15); }
+}
+
+.animate-fadeIn { animation: fadeIn 0.5s ease both; }
+.animate-slideUp { animation: slideUp 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-slideUp-delay { animation: slideUp 0.55s cubic-bezier(0.16,1,0.3,1) 0.12s both; }
+.animate-tick { animation: tick 0.38s ease; }
+
+.shimmer-btn {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.12) 50%, transparent 70%);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.shimmer-btn:hover::after {
+  opacity: 1;
+  animation: shimmer 1.2s ease;
+}
+
+.glow-amber {
+  animation: glowPulse 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

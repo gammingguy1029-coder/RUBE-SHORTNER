@@ -104,10 +104,29 @@ export default function Dashboard() {
   }
 
   function copy(text: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(text);
-      setTimeout(() => setCopied(null), 2000);
-    });
+    const cb = navigator.clipboard;
+    if (!cb?.writeText) {
+      // Fallback for http / old Safari — still copy via execCommand
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        setCopied(text);
+        setTimeout(() => setCopied(null), 2000);
+      } catch {}
+      return;
+    }
+    cb.writeText(text)
+      .then(() => {
+        setCopied(text);
+        setTimeout(() => setCopied(null), 2000);
+      })
+      .catch(() => {});
   }
 
   async function logout() {
@@ -123,26 +142,26 @@ export default function Dashboard() {
   const totalViews = links.reduce((a, b) => a + (b.views ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fadeIn">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Admin Dashboard</h1>
-        <button onClick={logout} className="text-xs border border-neutral-700 rounded px-3 py-1.5 hover:bg-neutral-900">
+        <h1 className="text-xl font-semibold tracking-tight">Admin Dashboard</h1>
+        <button onClick={logout} className="text-xs border border-neutral-700 rounded px-3 py-1.5 hover:bg-neutral-900 hover:border-neutral-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
           Logout
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 transition-all duration-200 hover:border-neutral-700 hover:bg-neutral-900/60 hover:shadow-lg">
           <p className="text-xs text-neutral-500">Total links</p>
           <p className="text-xl font-semibold">{links.length}</p>
         </div>
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 transition-all duration-200 hover:border-neutral-700 hover:bg-neutral-900/60 hover:shadow-lg">
           <p className="text-xs text-neutral-500">Total views</p>
           <p className="text-xl font-semibold">{totalViews.toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900/30 p-4 flex flex-col gap-3">
+      <div className="rounded-lg border border-neutral-800 bg-neutral-900/30 p-4 flex flex-col gap-3 transition-colors duration-200 hover:border-neutral-700/60">
         <h2 className="text-sm font-medium">Create Link</h2>
         <div className="flex gap-2">
           <input
@@ -150,23 +169,23 @@ export default function Dashboard() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && create()}
             placeholder="https://destination.com"
-            className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+            className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 transition-colors"
           />
           <button
             onClick={create}
             disabled={loading || !url}
-            className="bg-white text-black rounded px-5 py-2 text-sm font-medium disabled:opacity-40 shrink-0"
+            className="bg-white text-black rounded px-5 py-2 text-sm font-medium disabled:opacity-40 shrink-0 transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] shimmer-btn disabled:hover:scale-100"
           >
             {loading ? "..." : "Create"}
           </button>
         </div>
-        {err && <p className="text-red-400 text-sm">{err}</p>}
+        {err && <p className="text-red-400 text-sm animate-fadeIn">{err}</p>}
         {result && (
-          <div className="flex items-center gap-2 bg-green-950/30 border border-green-900/40 rounded px-3 py-2">
+          <div className="flex items-center gap-2 bg-green-950/30 border border-green-900/40 rounded px-3 py-2 animate-fadeIn">
             <p className="text-green-400 text-sm break-all flex-1">{result}</p>
             <button
               onClick={() => copy(result)}
-              className="text-xs bg-white text-black rounded px-2 py-1 shrink-0"
+              className="text-xs bg-white text-black rounded px-2 py-1 shrink-0 transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
             >
               {copied === result ? "Copied!" : "Copy"}
             </button>
@@ -212,7 +231,7 @@ export default function Dashboard() {
                   {filtered.map((l) => {
                     const shortUrl = `${baseUrl}/${l.short_code}`;
                     return (
-                      <tr key={l.id} className="hover:bg-neutral-900/30">
+                      <tr key={l.id} className="hover:bg-neutral-900/30 transition-colors duration-150">
                         <td className="px-3 py-2">
                           <a href={shortUrl} target="_blank" rel="noopener" className="font-mono text-white hover:underline">
                             /{l.short_code}
@@ -235,14 +254,14 @@ export default function Dashboard() {
                           <div className="flex justify-end gap-1">
                             <button
                               onClick={() => copy(shortUrl)}
-                              className="text-xs border border-neutral-700 rounded px-2 py-1 hover:bg-neutral-800"
+                              className="text-xs border border-neutral-700 rounded px-2 py-1 hover:bg-neutral-800 transition-all duration-150 hover:scale-[1.02] active:scale-[0.97]"
                             >
                               {copied === shortUrl ? "Copied" : "Copy"}
                             </button>
                             <button
                               onClick={() => del(l.short_code)}
                               disabled={actionLoading === l.short_code}
-                              className="text-xs border border-red-900/50 text-red-400 rounded px-2 py-1 hover:bg-red-950/30 disabled:opacity-40"
+                              className="text-xs border border-red-900/50 text-red-400 rounded px-2 py-1 hover:bg-red-950/30 disabled:opacity-40 transition-all duration-150 hover:scale-[1.02] active:scale-[0.97]"
                             >
                               Delete
                             </button>
