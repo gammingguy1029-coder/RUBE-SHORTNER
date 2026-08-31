@@ -36,9 +36,4 @@ export async function isAdmin(): Promise<boolean> {
   return checkSession(c.get(COOKIE)?.value);
 }
 
-export async function clearSessionCookie() {
-  const c = await cookies();
-  c.delete(COOKIE);
-}
-
 export const SESSION_COOKIE = COOKIE;

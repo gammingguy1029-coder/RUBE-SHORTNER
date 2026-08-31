@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AdUnit from "@/app/components/AdUnit";
 import SocialBar from "@/app/components/SocialBar";
-import Popunder from "@/app/components/Popunder";
+import Popunder, { loadPopunder } from "@/app/components/Popunder";
 import { SMART_LINKS } from "@/lib/smartLinks";
 import { useAdblockDetect } from "@/lib/adblock";
 
@@ -22,10 +22,6 @@ declare global {
     };
   }
 }
-
-/** Smart links rotated across the two sponsor buttons — unlimited Direct Links. */
-const SMART_LINK_1 = SMART_LINKS[0];
-const SMART_LINK_2 = SMART_LINKS[1 % SMART_LINKS.length];
 
 const COUNTDOWN_SECONDS = 15;
 const CONSENT_KEY = "ls_consent_v1";
@@ -270,6 +266,10 @@ export default function Unlocker({ code }: { code: string }) {
     }
 
     openSponsor(pickLink(1));
+    // Popunder triggered on user interaction, not on page load
+    try {
+      loadPopunder();
+    } catch {}
 
     setLoading(true);
     setErr("");
@@ -435,7 +435,7 @@ export default function Unlocker({ code }: { code: string }) {
         {/* Visible instruction — requested: click and open sponsor link, wait 5 sec and come back */}
         <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center">
           <p className="text-sm font-medium text-amber-300">
-            👉 Click “Open Sponsor” — sponsor opens in new tab
+            {step === 0 ? "→ Click “Open Sponsor & Continue (1 of 2)” — sponsor opens in new tab" : "→ Complete the check, then click “Open Sponsor & Get My Link (2 of 2)”"}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
             Wait <span className="font-semibold text-amber-300">5 seconds</span> on the sponsor page, then come back here and continue. Your countdown is saved.

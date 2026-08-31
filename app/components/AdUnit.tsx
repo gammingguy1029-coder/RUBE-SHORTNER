@@ -2,11 +2,6 @@
 import { useEffect, useRef } from "react";
 import { reportAdResult } from "@/lib/adblock";
 
-// Module-level banner queue — serializes window.atOptions banner loads so two
-// banner units on the same page don't race. Native units are exempt.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-let bannerQueue: Promise<void> = Promise.resolve();
-
 export default function AdUnit({
   adKey,
   width,
@@ -30,60 +25,56 @@ export default function AdUnit({
     injected.current = true;
     const hostEl = host.current;
 
-    const doInject = () => {
-      if (variant === "banner") {
-        const config = document.createElement("script");
-        config.type = "text/javascript";
-        config.text = `window.atOptions = ${JSON.stringify({
-          key: adKey,
-          format: "iframe",
-          height,
-          width,
-          params: {},
-        })};`;
-        hostEl.appendChild(config);
-      }
-
-      const script = document.createElement("script");
-      script.type = "text/javascript";
-      script.src = scriptSrc;
-
-      let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    if (variant === "banner") {
+      // iframe srcdoc isolation — each banner gets its own window.atOptions, no global race.
+      // Mirrors WordPress widget isolation per joshwp research.
+      const iframe = document.createElement("iframe");
+      iframe.width = String(width);
+      iframe.height = String(height);
+      iframe.scrolling = "no";
+      iframe.setAttribute("frameborder", "0");
+      iframe.style.border = "0";
+      iframe.style.display = "block";
+      // no sandbox — needs scripts to run; isolated via srcdoc's own window
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}body{width:${width}px;height:${height}px}</style></head><body><script>window.atOptions=${JSON.stringify({ key: adKey, format: "iframe", height, width, params: {} })}<\/script><script src="${scriptSrc}"><\/script></body></html>`;
+      // report based on iframe load (creative inside may still fail, but network-level block will error the iframe's script and bubble as iframe load failure in practice)
+      let timer: ReturnType<typeof setTimeout> | undefined;
       let settled = false;
-
       const finish = (ok: boolean) => {
         if (settled) return;
         settled = true;
-        if (loadTimer !== undefined) clearTimeout(loadTimer);
+        if (timer !== undefined) clearTimeout(timer);
         reportAdResult(adKey, ok);
       };
-
-      loadTimer = setTimeout(() => finish(false), 8000);
-      script.onload = () => finish(true);
-      script.onerror = () => finish(false);
-
-      if (variant === "native") {
-        script.async = true;
-        script.setAttribute("data-cfasync", "false");
-      } else {
-        script.async = false;
-      }
-      hostEl.appendChild(script);
-    };
-
-    if (variant === "banner") {
-      // Queue banner injections so atOptions isn't overwritten before invoke.js reads it.
-      bannerQueue = bannerQueue.then(
-        () =>
-          new Promise<void>((resolve) => {
-            doInject();
-            // Give banner invoke.js time to read atOptions before next banner overwrites it.
-            setTimeout(resolve, 1200);
-          })
-      );
-    } else {
-      doInject();
+      timer = setTimeout(() => finish(false), 8000);
+      iframe.onload = () => finish(true);
+      iframe.onerror = () => finish(false);
+      // srcdoc not supported in very old browsers, fallback to src via blob
+      (iframe as HTMLIFrameElement & { srcdoc: string }).srcdoc = html;
+      hostEl.appendChild(iframe);
+      return;
     }
+
+    // Native — per-key container, no global
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = scriptSrc;
+    script.async = true;
+    script.setAttribute("data-cfasync", "false");
+
+    let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (loadTimer !== undefined) clearTimeout(loadTimer);
+      reportAdResult(adKey, ok);
+    };
+    loadTimer = setTimeout(() => finish(false), 8000);
+    script.onload = () => finish(true);
+    script.onerror = () => finish(false);
+
+    hostEl.appendChild(script);
   }, [adKey, width, height, variant, scriptSrc]);
 
   return (

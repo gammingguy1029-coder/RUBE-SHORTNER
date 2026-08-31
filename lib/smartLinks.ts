@@ -12,5 +12,4 @@ export const SMART_LINKS: readonly string[] = [
   "https://www.profitableratecpmnetwork.com/jj7aty0s1?key=19c2bf8db6c6f59fb8a7b312b14afdd6",
 ];
 
-// Fallback if you only want effectivecpmnetwork legacy (deduped w3194snfs already handled)
-export const LEGACY_SMART_LINKS = SMART_LINKS.slice(0, 2);
+

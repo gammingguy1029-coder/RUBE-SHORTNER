@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SMART_LINKS } from "@/lib/smartLinks";
 
 export const metadata = {
   title: "Rube Ads Shortener",
@@ -38,7 +39,7 @@ export default function Home() {
       </p>
 
       <a
-        href="https://www.profitableratecpmnetwork.com/zcsxs9q14a?key=5888a61216a1477ea1fb0951f57a5c6b"
+        href={SMART_LINKS[2]}
         target="_blank"
         rel="noopener nofollow"
         className="text-xs text-neutral-500 underline hover:text-neutral-300"
