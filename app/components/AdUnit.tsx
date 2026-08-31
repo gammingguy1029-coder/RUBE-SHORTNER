@@ -92,7 +92,7 @@ export default function AdUnit({
       <span className="text-[10px] uppercase tracking-wider text-neutral-600">Advertisement</span>
       <div
         style={{ width, minHeight: height, maxWidth: "100%" }}
-        className="flex items-center justify-center rounded-lg border border-neutral-800/60 bg-neutral-900/20 p-2 transition-colors duration-300 hover:border-neutral-700/60"
+        className="flex items-center justify-center rounded-lg border border-neutral-800/60 bg-neutral-900/20 p-2 card-lift"
       >
         <div ref={host} />
         {variant === "native" && <div id={`container-${adKey}`} />}

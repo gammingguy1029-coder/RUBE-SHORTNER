@@ -324,7 +324,7 @@ export default function Unlocker({ code }: { code: string }) {
 
   if (!consent) {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-5 animate-slideUp shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)]">
+      <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-5 animate-slideUp shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)] card-lift">
         <h1 className="text-lg font-semibold">Before you continue</h1>
         <p className="text-sm leading-relaxed text-neutral-400">
           This link is unlocked by advertising. To continue you must accept our
@@ -441,7 +441,7 @@ export default function Unlocker({ code }: { code: string }) {
         </div>
 
         {/* Visible instruction — requested: click and open sponsor link, wait 5 sec and come back */}
-        <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center animate-slideUp-delay glow-amber">
+        <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center animate-slideUp-delay glow-amber card-lift">
           <p className="text-sm font-medium text-amber-300">
             {step === 0 ? "→ Click “Open Sponsor & Continue (1 of 2)” — sponsor opens in new tab" : "→ Complete the check, then click “Open Sponsor & Get My Link (2 of 2)”"}
           </p>
@@ -461,15 +461,34 @@ export default function Unlocker({ code }: { code: string }) {
         />
 
         {!countdownDone && (
-          <div className="text-center w-full max-w-[280px]">
-            <p key={seconds} className="font-mono text-4xl tabular-nums animate-tick">
-              {seconds}
-            </p>
-            <p className="mt-1 text-xs text-neutral-500">
+          <div className="flex flex-col items-center gap-3 w-full max-w-[280px]">
+            {/* Circular countdown — more premium than plain number */}
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <svg className="absolute inset-0 h-24 w-24 -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="rgb(38 38 38)" strokeWidth="6" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={263.89}
+                  strokeDashoffset={263.89 * (1 - seconds / COUNTDOWN_SECONDS)}
+                  className="transition-all duration-300 ease-linear"
+                  style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.25))" }}
+                />
+              </svg>
+              <p key={seconds} className="relative font-mono text-3xl font-semibold tabular-nums animate-tick">
+                {seconds}
+              </p>
+            </div>
+            <p className="text-xs text-neutral-500">
               Please wait{seconds === 1 ? " 1 second" : ` ${seconds} seconds`}
             </p>
-            {/* Progress bar */}
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+            {/* Linear fallback bar */}
+            <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-800">
               <div
                 className="h-full rounded-full bg-white transition-all duration-300 ease-linear"
                 style={{ width: `${(seconds / COUNTDOWN_SECONDS) * 100}%` }}

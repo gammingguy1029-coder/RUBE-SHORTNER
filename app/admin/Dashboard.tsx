@@ -228,10 +228,14 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800">
-                  {filtered.map((l) => {
+                  {filtered.map((l, i) => {
                     const shortUrl = `${baseUrl}/${l.short_code}`;
                     return (
-                      <tr key={l.id} className="hover:bg-neutral-900/30 transition-colors duration-150">
+                      <tr
+                        key={l.id}
+                        className="hover:bg-neutral-900/30 transition-colors duration-150"
+                        style={{ animation: `staggerIn 0.4s ease ${Math.min(i * 0.04, 0.3)}s both` }}
+                      >
                         <td className="px-3 py-2">
                           <a href={shortUrl} target="_blank" rel="noopener" className="font-mono text-white hover:underline">
                             /{l.short_code}

@@ -9,10 +9,14 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 p-6 text-center">
+    <main className="relative mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 p-6 text-center overflow-hidden">
+      {/* Soft animated blobs behind */}
+      <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-600/10 blur-[80px] animate-float" />
+      <div className="pointer-events-none absolute -bottom-20 -right-20 h-64 w-64 rounded-full bg-neutral-700/20 blur-[60px] animate-float" style={{ animationDelay: "1.2s" }} />
+
       <h1 className="text-3xl font-semibold tracking-tight animate-slideUp">Welcome to Rube Ads Shortener</h1>
 
-      <div className="w-full rounded-lg border border-amber-900/50 bg-amber-950/20 p-5 animate-slideUp-delay shadow-[0_8px_32px_-12px_rgba(251,146,60,0.15)] transition-all duration-300 hover:border-amber-800/60 hover:bg-amber-950/30">
+      <div className="w-full rounded-lg border border-amber-900/50 bg-amber-950/20 p-5 animate-slideUp-delay shadow-[0_8px_32px_-12px_rgba(251,146,60,0.15)] card-lift">
         <p className="text-sm font-medium text-amber-300">
           This website is not public yet
         </p>
