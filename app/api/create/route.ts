@@ -6,8 +6,20 @@ import { randomBytes } from "crypto";
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
 function genCode(len: number): string {
-  const bytes = randomBytes(len);
-  return Array.from(bytes, (b) => CHARS[b % CHARS.length]).join("");
+  // Rejection sampling: randomBytes gives 0..255 but CHARS has 56 entries, so
+  // 256 % 56 = 32 made the first 32 chars slightly more likely than the rest.
+  // Discarding 0..223 keeps only 224 % 56 = 0 — i.e. all 56 chars are now
+  // equally probable.
+  const out: string[] = [];
+  const CHARS_LEN = CHARS.length;
+  const MAX = 256 - (256 % CHARS_LEN);
+  while (out.length < len) {
+    const bytes = randomBytes(len * 2);
+    for (const b of bytes) {
+      if (b < MAX && out.length < len) out.push(CHARS[b % CHARS_LEN]);
+    }
+  }
+  return out.join("");
 }
 
 function validUrl(url: string): boolean {

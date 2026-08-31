@@ -3,8 +3,7 @@ import { db } from "@/lib/supabase";
 import { verify } from "@/lib/token";
 import { rateLimit } from "@/lib/ratelimit";
 import { clientIp } from "@/lib/clientIp";
-
-const CODE_RE = /^[A-Za-z0-9]{6,12}$/;
+import { CODE_RE } from "@/lib/shortCode";
 
 /**
  * Recovery page shown when the unlock token is missing, expired or already
@@ -113,13 +112,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   }
 
   // Fire-and-forget so a slow analytics write never delays the redirect. Atomic increment avoids race.
-  void db.rpc("increment_link_views", { p_id: data.id }).then(({ error: rpcError }) => {
-    if (rpcError) {
-      console.error("[r] increment error", rpcError.message);
-      // Fallback if function not yet deployed (old DB)
-      void db.from("links").update({ views: (data.views ?? 0) + 1 }).eq("id", data.id);
+  // Wrapping in a function to satisfy TS — the void- prefix hides the Promise type.
+  (async () => {
+    try {
+      const { error: rpcError } = await db.rpc("increment_link_views", { p_id: data.id });
+      if (rpcError) {
+        console.error("[r] increment error", rpcError.message);
+        // Fallback if function not yet deployed (old DB)
+        const { error: updError } = await db
+          .from("links")
+          .update({ views: (data.views ?? 0) + 1 })
+          .eq("id", data.id);
+        if (updError) console.error("[r] fallback increment error", updError.message);
+      }
+    } catch (e) {
+      console.error("[r] increment unhandled", e instanceof Error ? e.message : e);
     }
-  });
+  })();
 
   return NextResponse.redirect(safeDestination, { status: 302 });
 }

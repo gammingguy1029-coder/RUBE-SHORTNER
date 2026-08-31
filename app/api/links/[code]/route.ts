@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/session";
 import { db } from "@/lib/supabase";
-
-const CODE_RE = /^[A-Za-z0-9]{6,12}$/;
+import { CODE_RE } from "@/lib/shortCode";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

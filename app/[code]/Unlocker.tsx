@@ -40,7 +40,10 @@ const TURNSTILE_LOAD_TIMEOUT_MS = 12_000;
  * why the UI offers an explicit "didn't open?" link instead of guessing.
  */
 function openSponsor(url: string) {
-  window.open(url, "_blank", "noopener");
+  // noreferrer is required by some ad networks' click-quality policy: with
+  // noopener alone, browsers still send the referrer, which networks can
+  // devalue as "missing context" for outbound clicks.
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export default function Unlocker({ code }: { code: string }) {
@@ -462,7 +465,8 @@ export default function Unlocker({ code }: { code: string }) {
 
         {!countdownDone && (
           <div className="flex flex-col items-center gap-3 w-full max-w-[280px]">
-            {/* Circular countdown — more premium than plain number */}
+            {/* Circular countdown — color shifts amber in the last 5s, red in the last 3s
+                so visitors feel the urgency instead of staring at a number. */}
             <div className="relative flex h-24 w-24 items-center justify-center">
               <svg className="absolute inset-0 h-24 w-24 -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" fill="none" stroke="rgb(38 38 38)" strokeWidth="6" />
@@ -471,13 +475,13 @@ export default function Unlocker({ code }: { code: string }) {
                   cy="50"
                   r="42"
                   fill="none"
-                  stroke="white"
+                  stroke={seconds <= 3 ? "#ef4444" : seconds <= 5 ? "#f59e0b" : "#ffffff"}
                   strokeWidth="6"
                   strokeLinecap="round"
                   strokeDasharray={263.89}
                   strokeDashoffset={263.89 * (1 - seconds / COUNTDOWN_SECONDS)}
                   className="transition-all duration-300 ease-linear"
-                  style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.25))" }}
+                  style={{ filter: `drop-shadow(0 0 ${seconds <= 3 ? 10 : 6}px ${seconds <= 3 ? "rgba(239,68,68,0.55)" : seconds <= 5 ? "rgba(245,158,11,0.45)" : "rgba(255,255,255,0.25)"})` }}
                 />
               </svg>
               <p key={seconds} className="relative font-mono text-3xl font-semibold tabular-nums animate-tick">
@@ -490,8 +494,11 @@ export default function Unlocker({ code }: { code: string }) {
             {/* Linear fallback bar */}
             <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-800">
               <div
-                className="h-full rounded-full bg-white transition-all duration-300 ease-linear"
-                style={{ width: `${(seconds / COUNTDOWN_SECONDS) * 100}%` }}
+                className="h-full rounded-full transition-all duration-300 ease-linear"
+                style={{
+                  width: `${(seconds / COUNTDOWN_SECONDS) * 100}%`,
+                  backgroundColor: seconds <= 3 ? "#ef4444" : seconds <= 5 ? "#f59e0b" : "#ffffff",
+                }}
               />
             </div>
           </div>
@@ -543,7 +550,15 @@ export default function Unlocker({ code }: { code: string }) {
               ? "Open Sponsor & Continue (1 of 2)"
               : `Please wait ${seconds}s`
             : loading
-              ? "Unlocking…"
+              ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4 animate-spin-slow" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  Unlocking…
+                </span>
+              )
               : "Open Sponsor & Get My Link (2 of 2)"}
         </button>
 
@@ -553,7 +568,7 @@ export default function Unlocker({ code }: { code: string }) {
             <a
               href={SMART_LINKS[0]}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               className="underline hover:text-neutral-300 transition-colors"
             >
               Open it here

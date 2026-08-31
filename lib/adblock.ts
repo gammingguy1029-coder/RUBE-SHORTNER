@@ -121,12 +121,16 @@ export function useAdblockDetect(enabled: boolean): AdblockStatus {
     let cancelled = false;
 
     // Small delay so a blocker's content scripts have applied their rules.
+    // Either probe is enough — the fetch probe misses network-level blockers
+    // that don't touch the /ads/ path, and the bait probe misses DNS-level
+    // blockers that don't touch element visibility. Both failing was hiding
+    // visitors with Pi-hole-style blocking.
     const t = setTimeout(async () => {
       const byFetch = await fetchProbe();
       if (cancelled) return;
       const byBait = baitProbe();
       if (cancelled) return;
-      setProbed(byFetch && byBait);
+      setProbed(byFetch || byBait);
     }, 900);
 
     return () => {

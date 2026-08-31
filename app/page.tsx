@@ -45,7 +45,7 @@ export default function Home() {
       <a
         href={SMART_LINKS[2]}
         target="_blank"
-        rel="noopener nofollow"
+        rel="noopener noreferrer nofollow"
         className="text-xs text-neutral-500 underline hover:text-neutral-300 transition-colors animate-fadeIn"
         style={{ animationDelay: "0.3s" }}
       >

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reportAdResult } from "@/lib/adblock";
 
 export default function AdUnit({
@@ -19,6 +19,9 @@ export default function AdUnit({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const injected = useRef(false);
+  // True until either the script has loaded, the inner iframe has reported, or
+  // the timeout fires — used to keep the skeleton-shimmer visible in the slot.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (injected.current || !host.current) return;
@@ -47,6 +50,7 @@ export default function AdUnit({
       const onMessage = (e: MessageEvent) => {
         if (!e.data || e.data.type !== "adResult" || e.data.adKey !== adKey) return;
         finish(Boolean(e.data.ok));
+        if (e.data.ok) setLoaded(true);
       };
       window.addEventListener("message", onMessage);
       // If banner never reports (slow network, very old browser without srcdoc), don't false-positive as blocked.
@@ -78,7 +82,7 @@ export default function AdUnit({
       reportAdResult(adKey, ok);
     };
     loadTimer = setTimeout(() => finish(false), 8000);
-    script.onload = () => finish(true);
+    script.onload = () => { finish(true); setLoaded(true); };
     script.onerror = () => finish(false);
 
     hostEl.appendChild(script);
@@ -92,7 +96,7 @@ export default function AdUnit({
       <span className="text-[10px] uppercase tracking-wider text-neutral-600">Advertisement</span>
       <div
         style={{ width, minHeight: height, maxWidth: "100%" }}
-        className="flex items-center justify-center rounded-lg border border-neutral-800/60 bg-neutral-900/20 p-2 card-lift"
+        className={`flex items-center justify-center rounded-lg border border-neutral-800/60 bg-neutral-900/20 p-2 card-lift transition-opacity duration-500 ${loaded ? "opacity-100" : "ad-skeleton"}`}
       >
         <div ref={host} />
         {variant === "native" && <div id={`container-${adKey}`} />}

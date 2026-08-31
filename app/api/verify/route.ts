@@ -3,8 +3,7 @@ import { db } from "@/lib/supabase";
 import { sign } from "@/lib/token";
 import { rateLimit } from "@/lib/ratelimit";
 import { clientIp } from "@/lib/clientIp";
-
-const CODE_RE = /^[A-Za-z0-9]{6,12}$/;
+import { CODE_RE } from "@/lib/shortCode";
 
 export async function POST(req: NextRequest) {
   // Only the first hop. Using the whole header let an attacker change the

@@ -2,10 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: #0a0a0a;
   color: #e5e5e5;
   position: relative;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Animated mesh background — very subtle, behind everything */
@@ -49,10 +54,6 @@ body::before {
   0%, 100% { border-color: rgba(120, 53, 15, 0.35); box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.0); }
   50% { border-color: rgba(180, 83, 9, 0.5); box-shadow: 0 0 20px -6px rgba(251, 146, 60, 0.15); }
 }
-@keyframes ringSpin {
-  from { transform: rotate(-90deg); }
-  to { transform: rotate(270deg); }
-}
 @keyframes floatSlow {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
@@ -61,12 +62,29 @@ body::before {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes skeletonShimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.92) translateY(4px); }
+  60% { opacity: 1; transform: scale(1.03) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 .animate-fadeIn { animation: fadeIn 0.5s ease both; }
 .animate-slideUp { animation: slideUp 0.55s cubic-bezier(0.16,1,0.3,1) both; }
 .animate-slideUp-delay { animation: slideUp 0.55s cubic-bezier(0.16,1,0.3,1) 0.12s both; }
 .animate-tick { animation: tick 0.38s ease; }
 .animate-float { animation: floatSlow 3.5s ease-in-out infinite; }
+.animate-spin-slow { animation: spin 0.8s linear infinite; }
+.animate-pulse-dot { animation: pulseDot 1.4s ease-in-out infinite; }
+.animate-popIn { animation: popIn 0.28s cubic-bezier(0.16,1,0.3,1) both; }
 
 .shimmer-btn {
   position: relative;
@@ -98,10 +116,44 @@ body::before {
   box-shadow: 0 12px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
 }
 
+/* Ad-slot skeleton — sweeps a faint highlight while waiting for the script to paint a creative. */
+.ad-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(23 23 23 / 0.4);
+}
+.ad-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+  background-size: 400px 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Global focus-visible ring — replaces the removed `focus:outline-none` so keyboard users
+   can see where they are. Barely visible on mouse click via focus-visible. */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid rgb(245 158 11 / 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Native cross-fade on supported browsers. */
+@supports (view-transition-name: foo) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.18s;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  html { scroll-behavior: auto; }
   body::before { animation: none !important; }
+  .ad-skeleton::after { animation: none !important; }
 }

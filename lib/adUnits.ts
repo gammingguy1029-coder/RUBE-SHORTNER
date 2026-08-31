@@ -32,8 +32,8 @@ export const AD_UNITS: readonly AdUnitDef[] = [
     height: 250,
   },
   {
-    // New native banner supplied by user — rendered on main domain.
-    // Placed on interstitial / below-fold so it never co-renders with the other banner on the same page.
+    // Second banner supplied by user — same shape as the one above; both render
+    // in their own iframe srcdoc so the global atOptions race no longer fires.
     variant: "banner",
     adKey: "6e855ffe8642d5f59d1f63f665190696",
     scriptSrc:

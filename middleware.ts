@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { CODE_RE } from "@/lib/shortCode";
 
 /** Ad network hosts that must be allowed to load scripts/frames/images. All on main domain. */
 const AD_HOSTS = [
@@ -41,7 +42,7 @@ export function middleware(req: NextRequest) {
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   const isCodePage =
-    !RESERVED_PATHS.has(pathname) && /^\/[A-Za-z0-9]{6,12}$/.test(pathname);
+    !RESERVED_PATHS.has(pathname) && CODE_RE.test(pathname.slice(1));
 
   if (isCodePage) {
     res.headers.set(

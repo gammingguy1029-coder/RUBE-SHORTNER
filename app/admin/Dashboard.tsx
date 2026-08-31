@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import CountUp from "@/app/components/CountUp";
 
 type LinkRow = {
   id: string;
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [debouncedFilter, setDebouncedFilter] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -45,6 +47,12 @@ export default function Dashboard() {
   useEffect(() => {
     fetchLinks();
   }, [fetchLinks]);
+
+  // Debounce filter so a 200ms typing burst doesn't re-filter the table on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedFilter(filter), 200);
+    return () => clearTimeout(t);
+  }, [filter]);
 
   async function create() {
     if (!isValidUrl(url)) {
@@ -136,8 +144,8 @@ export default function Dashboard() {
 
   const filtered = links.filter(
     (l) =>
-      l.short_code.toLowerCase().includes(filter.toLowerCase()) ||
-      l.destination_url.toLowerCase().includes(filter.toLowerCase())
+      l.short_code.toLowerCase().includes(debouncedFilter.toLowerCase()) ||
+      l.destination_url.toLowerCase().includes(debouncedFilter.toLowerCase())
   );
   const totalViews = links.reduce((a, b) => a + (b.views ?? 0), 0);
 
@@ -153,11 +161,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 transition-all duration-200 hover:border-neutral-700 hover:bg-neutral-900/60 hover:shadow-lg">
           <p className="text-xs text-neutral-500">Total links</p>
-          <p className="text-xl font-semibold">{links.length}</p>
+          <p className="text-xl font-semibold"><CountUp value={links.length} /></p>
         </div>
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 transition-all duration-200 hover:border-neutral-700 hover:bg-neutral-900/60 hover:shadow-lg">
           <p className="text-xs text-neutral-500">Total views</p>
-          <p className="text-xl font-semibold">{totalViews.toLocaleString()}</p>
+          <p className="text-xl font-semibold"><CountUp value={totalViews} /></p>
         </div>
       </div>
 
@@ -181,13 +189,21 @@ export default function Dashboard() {
         </div>
         {err && <p className="text-red-400 text-sm animate-fadeIn">{err}</p>}
         {result && (
-          <div className="flex items-center gap-2 bg-green-950/30 border border-green-900/40 rounded px-3 py-2 animate-fadeIn">
+          <div className="flex items-center gap-2 bg-green-950/30 border border-green-900/40 rounded px-3 py-2 animate-popIn">
             <p className="text-green-400 text-sm break-all flex-1">{result}</p>
             <button
               onClick={() => copy(result)}
-              className="text-xs bg-white text-black rounded px-2 py-1 shrink-0 transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
+              aria-label="Copy short URL"
+              className="text-xs bg-white text-black rounded px-2 py-1 shrink-0 transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] inline-flex items-center gap-1"
             >
-              {copied === result ? "Copied!" : "Copy"}
+              {copied === result ? (
+                <>
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse-dot" />
+                  Copied!
+                </>
+              ) : (
+                "Copy"
+              )}
             </button>
           </div>
         )}
@@ -258,9 +274,17 @@ export default function Dashboard() {
                           <div className="flex justify-end gap-1">
                             <button
                               onClick={() => copy(shortUrl)}
-                              className="text-xs border border-neutral-700 rounded px-2 py-1 hover:bg-neutral-800 transition-all duration-150 hover:scale-[1.02] active:scale-[0.97]"
+                              aria-label={`Copy ${l.short_code}`}
+                              className="text-xs border border-neutral-700 rounded px-2 py-1 hover:bg-neutral-800 transition-all duration-150 hover:scale-[1.02] active:scale-[0.97] inline-flex items-center gap-1"
                             >
-                              {copied === shortUrl ? "Copied" : "Copy"}
+                              {copied === shortUrl ? (
+                                <>
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse-dot" />
+                                  Copied
+                                </>
+                              ) : (
+                                "Copy"
+                              )}
                             </button>
                             <button
                               onClick={() => del(l.short_code)}
