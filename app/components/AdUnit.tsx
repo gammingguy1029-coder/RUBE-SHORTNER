@@ -56,7 +56,8 @@ export default function AdUnit({
       // If banner never reports (slow network, very old browser without srcdoc), don't false-positive as blocked.
       // 12s gives async creatives time; we still fall back to blocked only after definite timeout.
       timer = setTimeout(() => finish(false), 12000);
-      const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      const esc = (s: string) =>
+        s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}body{width:${width}px;height:${height}px}</style></head><body><script>window.atOptions=${JSON.stringify({ key: adKey, format: "iframe", height, width, params: {} })}<\/script><script>function _r(o){try{parent.postMessage({type:"adResult",adKey:"${esc(adKey)}",ok:o},"*")}catch(e){}}<\/script><script src="${esc(scriptSrc)}" onload="_r(true)" onerror="_r(false)"><\/script></body></html>`;
       (iframe as HTMLIFrameElement & { srcdoc: string }).srcdoc = html;
       hostEl.appendChild(iframe);

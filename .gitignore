@@ -8,3 +8,5 @@ out
 .vercel
 .DS_Store
 *.log
+# Local-only project memory (not pushed to GitHub)
+PROJECT_MEMORY.md

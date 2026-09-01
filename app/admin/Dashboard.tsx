@@ -177,6 +177,7 @@ export default function Dashboard() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && create()}
             placeholder="https://destination.com"
+            aria-label="Destination URL"
             className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 transition-colors"
           />
           <button
@@ -216,6 +217,7 @@ export default function Dashboard() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Search codes or URLs"
+            aria-label="Search codes or URLs"
             className="bg-neutral-900 border border-neutral-800 rounded px-3 py-1.5 text-xs w-48 focus:outline-none focus:border-neutral-700"
           />
         </div>

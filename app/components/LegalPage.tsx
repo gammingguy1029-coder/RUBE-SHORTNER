@@ -9,18 +9,18 @@ export default function LegalPage({
   children: React.ReactNode;
 }) {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
+    <main className="mx-auto max-w-2xl px-6 py-12 animate-fadeIn">
       <Link
         href="/"
-        className="text-sm text-neutral-500 underline hover:text-neutral-300"
+        className="text-sm text-neutral-500 underline hover:text-neutral-300 transition-colors"
       >
         ← Home
       </Link>
-      <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
-      <p className="mt-1 text-xs text-neutral-500">
+      <h1 className="mt-4 text-2xl font-semibold tracking-tight animate-slideUp">{title}</h1>
+      <p className="mt-1 text-xs text-neutral-500 animate-fadeIn" style={{ animationDelay: "0.08s" }}>
         Last updated: {LAST_UPDATED}
       </p>
-      <div className="legal mt-8 flex flex-col gap-5 text-sm leading-relaxed text-neutral-300">
+      <div className="legal mt-8 flex flex-col gap-5 text-sm leading-relaxed text-neutral-300 animate-fadeIn" style={{ animationDelay: "0.14s" }}>
         {children}
       </div>
     </main>
