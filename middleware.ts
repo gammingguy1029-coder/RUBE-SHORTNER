@@ -11,6 +11,12 @@ const AD_HOSTS = [
   "https://*.profitableratecpmnetwork.com",
 ].join(" ");
 
+const GA_HOSTS = [
+  "https://www.googletagmanager.com",
+  "https://www.google-analytics.com",
+  "https://region1.google-analytics.com",
+].join(" ");
+
 /**
  * Static routes that would otherwise match the short-code pattern below.
  * "/privacy" (7), "/contact" (7) and "/disclaimer" (10) are all alphanumeric
@@ -49,11 +55,11 @@ export function middleware(req: NextRequest) {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com ${AD_HOSTS}`,
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com ${AD_HOSTS} ${GA_HOSTS}`,
         "frame-src 'self' https://challenges.cloudflare.com https:",
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' https: data:",
-        "connect-src 'self' https://challenges.cloudflare.com https:",
+        `img-src 'self' https: data: ${GA_HOSTS}`,
+        `connect-src 'self' https://challenges.cloudflare.com https: ${GA_HOSTS}`,
         // Previously the code page had NO frame protection at all, so anyone
         // could embed the unlocker in a hidden iframe and farm impressions —
         // invalid traffic attributed to our ad account.
@@ -67,11 +73,11 @@ export function middleware(req: NextRequest) {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+        `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com ${GA_HOSTS}`,
         "frame-src 'self' https://challenges.cloudflare.com",
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' https: data:",
-        "connect-src 'self'",
+        `img-src 'self' https: data: ${GA_HOSTS}`,
+        `connect-src 'self' ${GA_HOSTS}`,
         "frame-ancestors 'none'",
       ].join("; ")
     );
