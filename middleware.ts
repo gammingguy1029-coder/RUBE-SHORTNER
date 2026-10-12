@@ -1,0 +1,107 @@
+import { NextRequest, NextResponse } from "next/server";
+import { CODE_RE } from "@/lib/shortCode";
+
+/** Ad network hosts that must be allowed to load scripts/frames/images. All on main domain. */
+const AD_HOSTS = [
+  "https://*.effectivecpmnetwork.com",
+  "https://www.highperformanceformat.com",
+  "https://*.highperformanceformat.com",
+  "https://www.highrevenueformat.com",
+  "https://*.highrevenueformat.com",
+  "https://*.profitableratecpmnetwork.com",
+].join(" ");
+
+const GA_HOSTS = [
+  "https://www.googletagmanager.com",
+  "https://www.google-analytics.com",
+  "https://region1.google-analytics.com",
+].join(" ");
+
+/**
+ * Static routes that would otherwise match the short-code pattern below.
+ * "/privacy" (7), "/contact" (7) and "/disclaimer" (10) are all alphanumeric
+ * and within the 6-12 length window, so without this list they would be served
+ * the loosened ad-page CSP. Next.js still routes them to the correct static
+ * page — only the headers were wrong. Add any future top-level page here.
+ */
+const RESERVED_PATHS = new Set([
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/contact",
+  "/dmca",
+  "/admin",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
+
+export function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const { pathname } = req.nextUrl;
+
+  res.headers.set("X-Content-Type-Options", "nosniff");
+
+  // Was "no-referrer" site-wide, which stripped the referrer from ad clicks.
+  // Networks use the referrer for attribution and traffic-quality scoring, and
+  // blank-referrer traffic is commonly devalued or flagged. This still hides the
+  // full path (which contains the short code) but sends the origin.
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // Security headers
+  res.headers.set("Permissions-Policy", "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()");
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.headers.set("X-Permitted-Cross-Domain-Policies", "none");
+
+  // In production, add HSTS (would be handled by Vercel/proxy in practice)
+  if (process.env.NODE_ENV === "production") {
+    res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+
+  const isCodePage =
+    !RESERVED_PATHS.has(pathname) && CODE_RE.test(pathname.slice(1));
+
+  if (isCodePage) {
+    res.headers.set(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com ${AD_HOSTS} ${GA_HOSTS}`,
+         "frame-src 'self' https://challenges.cloudflare.com",
+        "style-src 'self' 'unsafe-inline'",
+        `img-src 'self' https: data: ${GA_HOSTS}`,
+        `connect-src 'self' https://challenges.cloudflare.com https: ${GA_HOSTS}`,
+        // Previously the code page had NO frame protection at all, so anyone
+        // could embed the unlocker in a hidden iframe and farm impressions —
+        // invalid traffic attributed to our ad account.
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+    res.headers.set("X-Frame-Options", "DENY");
+  } else {
+    res.headers.set("X-Frame-Options", "DENY");
+    res.headers.set(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com ${GA_HOSTS}`,
+        "frame-src 'self' https://challenges.cloudflare.com",
+        "style-src 'self' 'unsafe-inline'",
+        `img-src 'self' https: data: ${GA_HOSTS}`,
+        `connect-src 'self' ${GA_HOSTS}`,
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+  }
+
+  // A tokenless /api/r/ request is NOT blocked here. It used to return raw JSON,
+  // which pre-empted the route's own retryPage() — so a visitor who had already
+  // watched both ads and finished the countdown hit a wall of JSON with no way
+  // back. The route rejects the empty token itself (verify("") is false) and
+  // serves a styled page with a working retry link, so nothing is lost by
+  // letting it through.
+  return res;
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
