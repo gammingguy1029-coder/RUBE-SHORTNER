@@ -24,6 +24,7 @@ declare global {
 }
 
 const COUNTDOWN_SECONDS = 15;
+const THIRD_STEP_COUNTDOWN = 5;
 const CONSENT_KEY = "ls_consent_v1";
 /** Turnstile script is treated as failed if it hasn't defined window.turnstile
  *  by now. Without this the old code polled forever and left the button
@@ -50,12 +51,19 @@ export default function Unlocker({ code }: { code: string }) {
   const [consent, setConsent] = useState(false);
   const [consentLoaded, setConsentLoaded] = useState(false);
   const [seconds, setSeconds] = useState(COUNTDOWN_SECONDS);
+  const [thirdStepSeconds, setThirdStepSeconds] = useState(THIRD_STEP_COUNTDOWN);
   const [tsToken, setTsToken] = useState("");
   const [tsReady, setTsReady] = useState(false);
   const [tsFailed, setTsFailed] = useState(false);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  /** Unlock ticket minted by /api/verify. Kept in state so step 2 can redirect
+   *  without re-verifying: the Turnstile token it was bought with is spent. */
+  const [unlockToken, setUnlockToken] = useState("");
+  /** Step 2's smart link has been opened. First tap opens it, second unlocks —
+   *  the label states which, so neither tap does something it didn't announce. */
+  const [smartOpened, setSmartOpened] = useState(false);
 
   const widgetHost = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | undefined>(undefined);
@@ -159,6 +167,40 @@ export default function Unlocker({ code }: { code: string }) {
       if (id !== undefined) clearInterval(id);
     };
   }, [code, consent]);
+
+  /* Third step countdown - starts after verification succeeds */
+  useEffect(() => {
+    if (step !== 2) return; // Only run when we're in step 2 (third step)
+    const key = `ls_third_deadline_${code}`;
+    let deadline: number;
+    try {
+      const saved = Number(sessionStorage.getItem(key));
+      // Valid if it's a real number no further out than one full countdown.
+      const valid =
+        Number.isFinite(saved) &&
+        saved <= Date.now() + THIRD_STEP_COUNTDOWN * 1000;
+      deadline = valid ? saved : Date.now() + THIRD_STEP_COUNTDOWN * 1000;
+      sessionStorage.setItem(key, String(deadline));
+    } catch {
+      deadline = Date.now() + THIRD_STEP_COUNTDOWN * 1000;
+    }
+
+    let id: ReturnType<typeof setInterval> | undefined;
+
+    const tick = () => {
+      const left = Math.ceil((deadline - Date.now()) / 1000);
+      setThirdStepSeconds(left > 0 ? left : 0);
+      if (left <= 0 && id !== undefined) clearInterval(id);
+    };
+
+    tick();
+    if (Math.ceil((deadline - Date.now()) / 1000) > 0) {
+      id = setInterval(tick, 250);
+    }
+    return () => {
+      if (id !== undefined) clearInterval(id);
+    };
+  }, [code, step]);
 
   /** Mint a fresh Turnstile token after one is consumed, expires, or errors. */
   const resetCaptcha = useCallback(() => {
@@ -285,53 +327,77 @@ export default function Unlocker({ code }: { code: string }) {
       return;
     }
 
-    if (!tsToken) {
-      setErr("Please complete the verification check above.");
-      return;
+    if (step === 1) {
+      if (!tsToken) {
+        setErr("Please complete the verification check above.");
+        return;
+      }
+
+      openSponsor(pickLink(1));
+      // Popunder triggered on user interaction, not on page load
+      try {
+        loadPopunder();
+      } catch {}
+
+      setLoading(true);
+      setErr("");
+      try {
+        const res = await fetch("/api/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, turnstileToken: tsToken }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          setLoading(false);
+          setErr(data.error ?? "Verification failed. Please try again.");
+          // The token has now been spent server-side. Without this reset the next
+          // tap would resubmit the same consumed token and fail forever with
+          // timeout-or-duplicate, permanently bricking the page.
+          resetCaptcha();
+          return;
+        }
+
+        if (typeof data.token !== "string" || !data.token) {
+          setLoading(false);
+          setErr("Could not get your link. Please try again.");
+          resetCaptcha();
+          return;
+        }
+
+        // Verification successful, move to third step (5-second wait)
+        setStep(2);
+        setUnlockToken(data.token); // Store the token for redirect
+        setLoading(false);
+        // Start the third step countdown
+        const thirdStepKey = `ls_third_deadline_${code}`;
+        const deadline = Date.now() + THIRD_STEP_COUNTDOWN * 1000;
+        sessionStorage.setItem(thirdStepKey, String(deadline));
+        setThirdStepSeconds(THIRD_STEP_COUNTDOWN);
+        return;
+      } catch {
+        setLoading(false);
+        setErr("Network error. Please check your connection and try again.");
+        resetCaptcha();
+      }
     }
 
-    openSponsor(pickLink(1));
-    // Popunder triggered on user interaction, not on page load
-    try {
-      loadPopunder();
-    } catch {}
-
-    setLoading(true);
-    setErr("");
-    try {
-      const res = await fetch("/api/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, turnstileToken: tsToken }),
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setLoading(false);
-        setErr(data.error ?? "Verification failed. Please try again.");
-        // The token has now been spent server-side. Without this reset the next
-        // tap would resubmit the same consumed token and fail forever with
-        // timeout-or-duplicate, permanently bricking the page.
-        resetCaptcha();
-        return;
+    if (step === 2) {
+      if (!smartOpened) {
+        // First click: open the smart link
+        openSponsor(SMART_LINKS[0]);
+        setSmartOpened(true);
+        // Update button text to indicate unlock
+      } else {
+        // Second click: unlock and redirect to destination
+        window.location.href = `/api/r/${code}?token=${encodeURIComponent(unlockToken)}`;
       }
-
-      if (typeof data.token !== "string" || !data.token) {
-        setLoading(false);
-        setErr("Could not get your link. Please try again.");
-        resetCaptcha();
-        return;
-      }
-
-      window.location.href = `/api/r/${code}?token=${encodeURIComponent(data.token)}`;
-    } catch {
-      setLoading(false);
-      setErr("Network error. Please check your connection and try again.");
-      resetCaptcha();
     }
   }
 
   const countdownDone = seconds <= 0;
+  const thirdStepDone = thirdStepSeconds <= 0;
   const canFinish = countdownDone && Boolean(tsToken) && !loading;
 
   // Avoid a flash of the consent gate before localStorage has been read.
@@ -449,23 +515,38 @@ export default function Unlocker({ code }: { code: string }) {
         <SocialBar />
         <Popunder />
         <div className="text-center animate-slideUp">
-          <h1 className="text-lg font-semibold tracking-tight">Your link is almost ready</h1>
+          <h1 className="text-lg font-semibold tracking-tight">
+            {step === 0
+              ? "Step 1 of 3 — visit our sponsor to unlock."
+              : step === 1
+                ? "Step 2 of 3 — verify you're human, then finish."
+                : "Step 3 of 3 — wait for content unlock"}
+          </h1>
           <p className="mt-1 text-sm text-neutral-500">
             {step === 0
-              ? "Step 1 of 2 — visit our sponsor to unlock."
-              : "Step 2 of 2 — verify you're human, then finish."}
+              ? "Visit our sponsor to unlock."
+              : step === 1
+                ? "Verify you're human, then finish."
+                : `Wait ${thirdStepSeconds} seconds for content to unlock`}
           </p>
           {/* Step dots */}
           <div className="mt-3 flex items-center justify-center gap-2">
             <span className={`h-1.5 rounded-full transition-all duration-500 ${step >= 0 ? "w-8 bg-white" : "w-6 bg-neutral-700"}`} />
             <span className={`h-1.5 rounded-full transition-all duration-500 ${step >= 1 ? "w-8 bg-white" : "w-6 bg-neutral-700"}`} />
+            <span className={`h-1.5 rounded-full transition-all duration-500 ${step >= 2 ? "w-8 bg-white" : "w-6 bg-neutral-700"}`} />
           </div>
         </div>
 
         {/* Visible instruction — requested: click and open sponsor link, wait 5 sec and come back */}
         <div className="w-full rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-center animate-slideUp-delay glow-amber card-lift" role="status" aria-live="polite">
           <p className="text-sm font-medium text-amber-300">
-            {step === 0 ? "→ Click “Open Sponsor & Continue (1 of 2)” — sponsor opens in new tab" : "→ Complete the check, then click “Open Sponsor & Get My Link (2 of 2)”"}
+            {step === 0
+              ? "→ Click “Open Sponsor & Continue (1 of 3)” — sponsor opens in new tab"
+              : step === 1
+                ? "→ Complete the check, then click “Open Sponsor & Get My Link (2 of 3)”"
+                : step === 2 && !smartOpened
+                  ? "→ Click “Open Sponsor Link (3 of 3)” — sponsor opens in new tab"
+                  : "→ Click “Unlock Content (3 of 3)” — get your link"}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
             Wait <span className="font-semibold text-amber-300">5 seconds</span> on the sponsor page, then come back here and continue. Your countdown is saved.
@@ -482,7 +563,7 @@ export default function Unlocker({ code }: { code: string }) {
           className="w-full"
         />
 
-        {!countdownDone && (
+        {!countdownDone && step < 2 && (
           <div className="flex flex-col items-center gap-3 w-full max-w-[280px]">
             {/* Circular countdown — color shifts amber in the last 5s, red in the last 3s
                 so visitors feel the urgency instead of staring at a number. */}
@@ -523,6 +604,47 @@ export default function Unlocker({ code }: { code: string }) {
           </div>
         )}
 
+        {/* Third step countdown */}
+        {step === 2 && (
+          <div className="flex flex-col items-center gap-3 w-full max-w-[280px]">
+            {/* Circular countdown for third step */}
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <svg className="absolute inset-0 h-24 w-24 -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="rgb(38 38 38)" strokeWidth="6" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="none"
+                  stroke={thirdStepSeconds <= 3 ? "#ef4444" : thirdStepSeconds <= 5 ? "#f59e0b" : "#ffffff"}
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={263.89}
+                  strokeDashoffset={263.89 * (1 - thirdStepSeconds / THIRD_STEP_COUNTDOWN)}
+                  className="transition-all duration-300 ease-linear"
+                  style={{ filter: `drop-shadow(0 0 ${thirdStepSeconds <= 3 ? 10 : 6}px ${thirdStepSeconds <= 3 ? "rgba(239,68,68,0.55)" : thirdStepSeconds <= 5 ? "rgba(245,158,11,0.45)" : "rgba(255,255,255,0.25)"})` }}
+                />
+              </svg>
+              <p key={thirdStepSeconds} className="relative font-mono text-3xl font-semibold tabular-nums animate-tick">
+                {thirdStepSeconds}
+              </p>
+            </div>
+            <p className="text-xs text-neutral-500">
+              Please wait{thirdStepSeconds === 1 ? " 1 second" : ` ${thirdStepSeconds} seconds`}
+            </p>
+            {/* Linear fallback bar */}
+            <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-800">
+              <div
+                className="h-full rounded-full transition-all duration-300 ease-linear"
+                style={{
+                  width: `${(thirdStepSeconds / THIRD_STEP_COUNTDOWN) * 100}%`,
+                  backgroundColor: thirdStepSeconds <= 3 ? "#ef4444" : thirdStepSeconds <= 5 ? "#f59e0b" : "#ffffff",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {countdownDone && step > 0 && (
           <div className="flex w-full flex-col items-center gap-2 animate-fadeIn">
             <div ref={widgetHost} className="min-h-[65px] transition-all duration-300" />
@@ -546,14 +668,16 @@ export default function Unlocker({ code }: { code: string }) {
         )}
 
         {/* Second banner — new 300x250 on main domain (queued to avoid atOptions race) */}
-        <AdUnit
-          variant="banner"
-          adKey="6e855ffe8642d5f59d1f63f665190696"
-          scriptSrc="https://www.highrevenueformat.com/6e855ffe8642d5f59d1f63f665190696/invoke.js"
-          width={300}
-          height={250}
-          className="w-full"
-        />
+        {step < 2 && (
+          <AdUnit
+            variant="banner"
+            adKey="6e855ffe8642d5f59d1f63f665190696"
+            scriptSrc="https://www.highrevenueformat.com/6e855ffe8642d5f59d1f63f665190696/invoke.js"
+            width={300}
+            height={250}
+            className="w-full"
+          />
+        )}
 
         {/* The label always states what the tap will do. The old button said
             "Continue" but silently opened an ad and required a second press —
@@ -561,14 +685,14 @@ export default function Unlocker({ code }: { code: string }) {
             networks classify as deceptive. */}
         <button
           onClick={handleClick}
-          disabled={step === 0 ? !countdownDone : !canFinish}
+          disabled={step === 0 ? !countdownDone : step === 1 ? !canFinish : !thirdStepDone}
           aria-busy={loading}
-          aria-disabled={step === 0 ? !countdownDone : !canFinish}
+          aria-disabled={step === 0 ? !countdownDone : step === 1 ? !canFinish : !thirdStepDone}
           className="w-full rounded bg-white px-6 py-3 font-medium text-black transition-all duration-200 hover:shadow-xl hover:scale-[1.015] active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none shimmer-btn"
         >
           {step === 0
             ? countdownDone
-              ? "Open Sponsor & Continue (1 of 2)"
+              ? "Open Sponsor & Continue (1 of 3)"
               : `Please wait ${seconds}s`
             : loading
               ? (
@@ -580,7 +704,11 @@ export default function Unlocker({ code }: { code: string }) {
                   Unlocking…
                 </span>
               )
-              : "Open Sponsor & Get My Link (2 of 2)"}
+              : step === 1
+                ? "Open Sponsor & Get My Link (2 of 3)"
+                : step === 2 && !smartOpened
+                  ? "Open Sponsor Link (3 of 3)"
+                  : "Unlock Content (3 of 3)"}
         </button>
 
         {step === 1 && !loading && (
@@ -605,14 +733,16 @@ export default function Unlocker({ code }: { code: string }) {
         )}
 
         {/* Banner below the fold-line: a second impression per visit. */}
-        <AdUnit
-          variant="banner"
-          adKey="b00444c5eda4e8aa8c625ec8d2c44342"
-          scriptSrc="https://www.highperformanceformat.com/b00444c5eda4e8aa8c625ec8d2c44342/invoke.js"
-          width={300}
-          height={250}
-          className="w-full"
-        />
+        {step < 2 && (
+          <AdUnit
+            variant="banner"
+            adKey="b00444c5eda4e8aa8c625ec8d2c44342"
+            scriptSrc="https://www.highperformanceformat.com/b00444c5eda4e8aa8c625ec8d2c44342/invoke.js"
+            width={300}
+            height={250}
+            className="w-full"
+          />
+        )}
 
         <p className="max-w-sm text-center text-[11px] leading-relaxed text-neutral-600">
           Sponsor pages open in a new tab and are provided by third parties. We

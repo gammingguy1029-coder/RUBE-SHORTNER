@@ -11,7 +11,7 @@
 export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || "This site";
 
 export const CONTACT_EMAIL =
-  process.env.NEXT_PUBLIC_CONTACT_EMAIL || "you@example.com";
+  process.env.NEXT_PUBLIC_CONTACT_EMAIL || "gammingguy1029@gmail.com";
 
 /** Jurisdiction whose law governs the Terms. TODO: set to your country/state. */
 export const GOVERNING_LAW =
